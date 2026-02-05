@@ -29,13 +29,20 @@ export default function CategoriesPage() {
     }
   }, [router])
 
-  const { data: categories = [], isLoading } = useQuery({
+  const { data: categoriesResponse = [], isLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
       const response = await api.get('/materials/categories/')
       return response.data
     },
+    retry: 1,
+    staleTime: 30000,
   })
+
+  // Normalize paginated response from DRF
+  const categories = Array.isArray(categoriesResponse)
+    ? categoriesResponse
+    : categoriesResponse?.results ?? []
 
   const createMutation = useMutation({
     mutationFn: async (data: CategoryFormData) => {

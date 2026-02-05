@@ -1,10 +1,11 @@
 export interface User {
   id: number
   email: string
-  first_name: string
-  last_name: string
+  full_name?: string
+  first_name?: string
+  last_name?: string
   user_type: 'inventarista' | 'empleado'
-  account: number
+  account: any
   is_active: boolean
 }
 

@@ -1,28 +1,40 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/store/authStore'
 
 export default function HomePage() {
   const router = useRouter()
-  const { isAuthenticated, initAuth } = useAuthStore()
+  const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    initAuth()
-    
-    if (isAuthenticated) {
-      router.push('/dashboard')
-    } else {
-      router.push('/login')
+    // Pequeño delay para asegurar que localStorage esté disponible
+    const checkAuth = () => {
+      try {
+        const token = localStorage.getItem('access_token')
+        if (token) {
+          router.replace('/dashboard')
+        } else {
+          router.replace('/login')
+        }
+      } catch (error) {
+        router.replace('/login')
+      } finally {
+        setIsChecking(false)
+      }
     }
-  }, [isAuthenticated, router, initAuth])
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">Cargando...</h1>
+    // Ejecutar inmediatamente
+    checkAuth()
+  }, [router])
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  return null
 }

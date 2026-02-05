@@ -43,11 +43,20 @@ export default function LocationsPage() {
     }
   }, [router])
 
-  const { data: locations = [], isLoading } = useQuery({
+  const { data: locationsResponse = [], isLoading } = useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
       const response = await api.get('/materials/locations/')
       return response.data
+    },
+    retry: 1,
+    staleTime: 30000,
+  })
+
+  // Normalize paginated response from DRF
+  const locations = Array.isArray(locationsResponse)
+    ? locationsResponse
+    : locationsResponse?.results ?? []
     },
   })
 

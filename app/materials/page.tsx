@@ -36,6 +36,10 @@ export default function MaterialsPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterLocation, setFilterLocation] = useState<string>('')
+  const [filterStatus, setFilterStatus] = useState<string>('')
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
     description: '',
@@ -55,7 +59,7 @@ export default function MaterialsPage() {
     }
   }, [router])
 
-  const { data: materials = [], isLoading } = useQuery({
+  const { data: materialsResponse = [], isLoading } = useQuery({
     queryKey: ['materials'],
     queryFn: async () => {
       const response = await api.get('/materials/materials/')
@@ -63,7 +67,11 @@ export default function MaterialsPage() {
     },
   })
 
-  const { data: categories = [] } = useQuery({
+  const materials = Array.isArray(materialsResponse)
+    ? materialsResponse
+    : materialsResponse?.results ?? []
+
+  const { data: categoriesResponse = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
       const response = await api.get('/materials/categories/')
@@ -71,13 +79,21 @@ export default function MaterialsPage() {
     },
   })
 
-  const { data: locations = [] } = useQuery({
+  const categories = Array.isArray(categoriesResponse)
+    ? categoriesResponse
+    : categoriesResponse?.results ?? []
+
+  const { data: locationsResponse = [] } = useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
       const response = await api.get('/materials/locations/')
       return response.data
     },
   })
+
+  const locations = Array.isArray(locationsResponse)
+    ? locationsResponse
+    : locationsResponse?.results ?? []
 
   const createMutation = useMutation({
     mutationFn: async (data: MaterialFormData) => {

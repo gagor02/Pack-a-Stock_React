@@ -47,7 +47,7 @@ export default function RegisterPage() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterData) => {
-      const response = await api.post('/accounts/register/', data)
+      const response = await api.post('/auth/register/', data)
       return response.data
     },
     onSuccess: (data) => {
