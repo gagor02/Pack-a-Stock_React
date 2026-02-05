@@ -24,11 +24,12 @@ interface MaterialFormData {
   description: string
   category: number | string
   location: number | string
-  serial_number: string
+  sku: string
   quantity: number
-  min_quantity: number
-  unit: string
+  min_stock_level: number
+  unit_of_measure: string
   status: string
+  is_available_for_loan: boolean
 }
 
 export default function MaterialsPage() {
@@ -45,11 +46,12 @@ export default function MaterialsPage() {
     description: '',
     category: '',
     location: '',
-    serial_number: '',
+    sku: '',
     quantity: 1,
-    min_quantity: 1,
-    unit: 'unidad',
+    min_stock_level: 1,
+    unit_of_measure: 'unit',
     status: 'available',
+    is_available_for_loan: true,
   })
 
   useEffect(() => {
@@ -150,11 +152,12 @@ export default function MaterialsPage() {
       description: '',
       category: '',
       location: '',
-      serial_number: '',
+      sku: '',
       quantity: 1,
-      min_quantity: 1,
-      unit: 'unidad',
+      min_stock_level: 1,
+      unit_of_measure: 'unit',
       status: 'available',
+      is_available_for_loan: true,
     })
   }
 
@@ -173,13 +176,14 @@ export default function MaterialsPage() {
     setFormData({
       name: material.name,
       description: material.description || '',
-      category: material.category?.id || '',
-      location: material.location?.id || '',
-      serial_number: material.serial_number || '',
+      category: material.category || '',
+      location: material.location || '',
+      sku: material.sku || '',
       quantity: material.quantity || 1,
-      min_quantity: material.min_quantity || 1,
-      unit: material.unit || 'unidad',
+      min_stock_level: material.min_stock_level || 1,
+      unit_of_measure: material.unit_of_measure || 'unit',
       status: material.status || 'available',
+      is_available_for_loan: material.is_available_for_loan !== undefined ? material.is_available_for_loan : true,
     })
     setShowForm(true)
   }
@@ -280,13 +284,14 @@ export default function MaterialsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Número de Serie
+                    SKU (opcional - se genera automáticamente)
                   </label>
                   <input
                     type="text"
-                    value={formData.serial_number}
-                    onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Dejar vacío para generar automáticamente"
                   />
                 </div>
 
@@ -306,13 +311,13 @@ export default function MaterialsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cantidad Mínima *
+                    Stock Mínimo *
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    value={formData.min_quantity}
-                    onChange={(e) => setFormData({ ...formData, min_quantity: parseInt(e.target.value) })}
+                    min="0"
+                    value={formData.min_stock_level}
+                    onChange={(e) => setFormData({ ...formData, min_stock_level: parseInt(e.target.value) })}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
@@ -320,16 +325,22 @@ export default function MaterialsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Unidad *
+                    Unidad de Medida *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.unit}
-                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  <select
+                    value={formData.unit_of_measure}
+                    onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="ej: unidad, kg, metro"
-                  />
+                  >
+                    <option value="unit">Unidad</option>
+                    <option value="set">Conjunto</option>
+                    <option value="box">Caja</option>
+                    <option value="package">Paquete</option>
+                    <option value="meter">Metro</option>
+                    <option value="kg">Kilogramo</option>
+                    <option value="liter">Litro</option>
+                  </select>
                 </div>
 
                 <div>

@@ -57,8 +57,6 @@ export default function LocationsPage() {
   const locations = Array.isArray(locationsResponse)
     ? locationsResponse
     : locationsResponse?.results ?? []
-    },
-  })
 
   const createMutation = useMutation({
     mutationFn: async (data: LocationFormData) => {
