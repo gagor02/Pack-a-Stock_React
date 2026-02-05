@@ -6,6 +6,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const QRScanner = dynamic(() => import('@/components/QRScanner'), { ssr: false })
 
 interface LoanRequestItem {
   id: number
@@ -71,6 +74,8 @@ export default function LoansPage() {
   const [returnLoanId, setReturnLoanId] = useState<number | null>(null)
   const [returnCondition, setReturnCondition] = useState('good')
   const [returnNotes, setReturnNotes] = useState('')
+  const [showQRScanner, setShowQRScanner] = useState(false)
+  const [scannedMaterial, setScannedMaterial] = useState<any>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -208,6 +213,24 @@ export default function LoansPage() {
     },
   })
 
+  const handleQRScan = async (qrCode: string) => {
+    try {
+      // Buscar material por código QR
+      const response = await api.get(`/materials/materials/?search=${qrCode}`)
+      const materials = Array.isArray(response.data) ? response.data : response.data?.results ?? []
+      
+      if (materials.length > 0) {
+        const material = materials[0]
+        setScannedMaterial(material)
+        toast.success(`Material encontrado: ${material.name}`)
+      } else {
+        toast.error('Material no encontrado')
+      }
+    } catch (error: any) {
+      toast.error('Error al buscar material')
+    }
+  }
+
   const handleApprove = (id: number) => {
     const notes = prompt('Notas (opcional):') || ''
     approveRequestMutation.mutate({ id, notes })
@@ -256,6 +279,15 @@ export default function LoansPage() {
             </Link>
             <h1 className="text-2xl font-bold text-gray-900">Préstamos</h1>
           </div>
+          <button
+            onClick={() => setShowQRScanner(true)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            </svg>
+            Escanear QR
+          </button>
         </div>
       </header>
 
@@ -469,6 +501,188 @@ export default function LoansPage() {
           </div>
         )}
       </main>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
+
+      {/* Scanned Material Card */}
+      {scannedMaterial && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-start">
+              <h3 className="text-xl font-semibold text-gray-900">Información Completa del Material</h3>
+              <button
+                onClick={() => setScannedMaterial(null)}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Imagen QR */}
+              {scannedMaterial.qr_image && (
+                <div className="mb-6 flex justify-center">
+                  <img 
+                    src={scannedMaterial.qr_image} 
+                    alt="QR Code" 
+                    className="w-48 h-48 border-2 border-gray-200 rounded-lg"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Información Básica */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Información Básica
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Nombre</p>
+                      <p className="font-semibold text-gray-900">{scannedMaterial.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Código QR</p>
+                      <p className="font-mono text-sm text-gray-900">{scannedMaterial.qr_code}</p>
+                    </div>
+                    {scannedMaterial.description && (
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase">Descripción</p>
+                        <p className="text-sm text-gray-700">{scannedMaterial.description}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Categoría y Ubicación */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    Categoría y Ubicación
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Categoría</p>
+                      <p className="font-medium text-gray-900">
+                        {scannedMaterial.category_detail?.name || 'Sin categoría'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Ubicación</p>
+                      <p className="font-medium text-gray-900">
+                        {scannedMaterial.location_detail?.name || 'Sin ubicación'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inventario */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    Inventario
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Cantidad Total</p>
+                      <p className="text-2xl font-bold text-gray-900">{scannedMaterial.quantity}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Disponibles</p>
+                      <p className="text-2xl font-bold text-green-600">{scannedMaterial.available_quantity}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">En Préstamo</p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {scannedMaterial.quantity - scannedMaterial.available_quantity}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Estado y Fechas */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Estado y Fechas
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Estado</p>
+                      <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
+                        scannedMaterial.status === 'available' ? 'bg-green-100 text-green-800' :
+                        scannedMaterial.status === 'on_loan' ? 'bg-yellow-100 text-yellow-800' :
+                        scannedMaterial.status === 'maintenance' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {scannedMaterial.status}
+                      </span>
+                    </div>
+                    {scannedMaterial.created_at && (
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase">Creado</p>
+                        <p className="text-sm text-gray-700">
+                          {new Date(scannedMaterial.created_at).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    )}
+                    {scannedMaterial.updated_at && (
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase">Última Actualización</p>
+                        <p className="text-sm text-gray-700">
+                          {new Date(scannedMaterial.updated_at).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="mt-6 flex gap-3">
+                <Link
+                  href={`/loans/new?material=${scannedMaterial.id}`}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 text-center font-medium transition shadow-sm hover:shadow"
+                  onClick={() => setScannedMaterial(null)}
+                >
+                  Crear Préstamo con este Material
+                </Link>
+                <button
+                  onClick={() => setScannedMaterial(null)}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -173,7 +173,7 @@ export default function DashboardPage() {
 
   const isLoading = materialsLoading || loansLoading || requestsLoading || usersLoading
 
-  // Show loading state briefly, then continue if data is taking too long
+  // Show loading state only on initial load
   if (isLoading && !materialsResponse && !loansResponse) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -185,13 +185,11 @@ export default function DashboardPage() {
     )
   }
 
+  // If no user in store, show minimal loading (should be fast)
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Verificando sesión...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
