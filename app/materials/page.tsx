@@ -5,7 +5,24 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
-import Link from 'next/link'
+import DashboardLayout from '@/components/layout/DashboardLayout'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { Button } from '@/components/ui'
+import { Input } from '@/components/ui'
+import { Badge } from '@/components/ui'
+import {
+  Package,
+  Plus,
+  Search,
+  MapPin,
+  Hash,
+  Edit2,
+  Trash2,
+  PackageOpen,
+  Image as ImageIcon,
+  Eye,
+  QrCode,
+} from 'lucide-react'
 
 interface Category {
   id: number
@@ -41,6 +58,9 @@ export default function MaterialsPage() {
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterLocation, setFilterLocation] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [viewingMaterial, setViewingMaterial] = useState<any | null>(null)
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
     description: '',
@@ -99,7 +119,25 @@ export default function MaterialsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: MaterialFormData) => {
-      const response = await api.post('/materials/materials/', data)
+      const formDataToSend = new FormData()
+
+      // Add all form fields
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          formDataToSend.append(key, value.toString())
+        }
+      })
+
+      // Add image if selected
+      if (selectedImage) {
+        formDataToSend.append('image', selectedImage)
+      }
+
+      const response = await api.post('/materials/materials/', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
       return response.data
     },
     onSuccess: () => {
@@ -146,6 +184,18 @@ export default function MaterialsPage() {
     },
   })
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -159,6 +209,8 @@ export default function MaterialsPage() {
       status: 'available',
       is_available_for_loan: true,
     })
+    setSelectedImage(null)
+    setImagePreview(null)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,58 +253,60 @@ export default function MaterialsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-blue-600 hover:text-blue-700">
-              ← Volver
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">Materiales</h1>
+    <DashboardLayout>
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Package className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Materiales</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestión de inventario y stock
+              </p>
+            </div>
           </div>
           {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              + Nuevo Material
-            </button>
+            <Button onClick={() => setShowForm(true)} size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Nuevo Material
+            </Button>
           )}
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {showForm ? (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-6">
-              {editingId ? 'Editar Material' : 'Nuevo Material'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {editingId ? 'Editar Material' : 'Nuevo Material'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Nombre *
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ej: Laptop Dell XPS 15"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Categoría *
                   </label>
-                  <select
+                  <Input
+                    as="select"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Seleccionar categoría</option>
                     {categories.map((cat: Category) => (
@@ -260,18 +314,18 @@ export default function MaterialsPage() {
                         {cat.name}
                       </option>
                     ))}
-                  </select>
+                  </Input>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Ubicación *
                   </label>
-                  <select
+                  <Input
+                    as="select"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Seleccionar ubicación</option>
                     {locations.map((loc: Location) => (
@@ -279,59 +333,56 @@ export default function MaterialsPage() {
                         {loc.name}
                       </option>
                     ))}
-                  </select>
+                  </Input>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    SKU (opcional - se genera automáticamente)
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    SKU (opcional)
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.sku}
                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Dejar vacío para generar automáticamente"
+                    placeholder="Se genera automáticamente"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Cantidad *
                   </label>
-                  <input
+                  <Input
                     type="number"
                     min="1"
                     value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Stock Mínimo *
                   </label>
-                  <input
+                  <Input
                     type="number"
                     min="0"
                     value={formData.min_stock_level}
                     onChange={(e) => setFormData({ ...formData, min_stock_level: parseInt(e.target.value) })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Unidad de Medida *
                   </label>
-                  <select
+                  <Input
+                    as="select"
                     value={formData.unit_of_measure}
                     onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="unit">Unidad</option>
                     <option value="set">Conjunto</option>
@@ -340,142 +391,375 @@ export default function MaterialsPage() {
                     <option value="meter">Metro</option>
                     <option value="kg">Kilogramo</option>
                     <option value="liter">Litro</option>
-                  </select>
+                  </Input>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Estado *
                   </label>
-                  <select
+                  <Input
+                    as="select"
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="available">Disponible</option>
                     <option value="in_use">En uso</option>
                     <option value="maintenance">Mantenimiento</option>
-                  </select>
+                  </Input>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Descripción
                 </label>
-                <textarea
+                <Input
+                  as="textarea"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Descripción detallada del material..."
                 />
               </div>
 
+              {/* Image Upload */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  <ImageIcon className="h-4 w-4 inline mr-2" />
+                  Imagen del Material (opcional)
+                </label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                />
+                {imagePreview && (
+                  <div className="mt-4 relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full max-w-xs rounded-lg border border-border"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedImage(null)
+                        setImagePreview(null)
+                      }}
+                      className="mt-2"
+                    >
+                      Remover imagen
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-4 pt-4">
-                <button
+                <Button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  size="lg"
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? 'Guardando...'
                     : editingId
-                    ? 'Actualizar'
-                    : 'Crear'}
-                </button>
-                <button
+                    ? 'Actualizar Material'
+                    : 'Crear Material'}
+                </Button>
+                <Button
                   type="button"
                   onClick={handleCancel}
-                  className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition"
+                  variant="secondary"
+                  size="lg"
                 >
                   Cancelar
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
+          </CardContent>
+          </Card>
         ) : isLoading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         ) : materials.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-              />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No hay materiales</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Comienza agregando un nuevo material a tu inventario.
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              + Agregar Material
-            </button>
-          </div>
+          <Card>
+            <CardContent className="p-12 text-center">
+              <PackageOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                No hay materiales
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Comienza agregando un nuevo material a tu inventario.
+              </p>
+              <Button onClick={() => setShowForm(true)} size="lg">
+                <Plus className="h-5 w-5 mr-2" />
+                Agregar Material
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {materials.map((material: any) => (
-              <div key={material.id} className="bg-white rounded-lg shadow p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{material.name}</h3>
-                    <p className="text-sm text-gray-600">{material.category?.name}</p>
+              <Card key={material.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300">
+                <CardContent className="p-0">
+                  {/* Product Image */}
+                  <div className="relative aspect-square bg-secondary/20 overflow-hidden">
+                    {material.image ? (
+                      <img
+                        src={material.image}
+                        alt={material.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-secondary/30 to-secondary/10">
+                        <Package className="h-20 w-20 text-muted-foreground/30" />
+                      </div>
+                    )}
+
+                    {/* QR Code Button - Top Left */}
+                    {material.qr_image && (
+                      <button
+                        onClick={() => setViewingMaterial(material)}
+                        className="absolute top-3 left-3 p-2 bg-background/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-primary-foreground transition-all duration-200 opacity-0 group-hover:opacity-100"
+                        title="Ver código QR"
+                      >
+                        <QrCode className="h-5 w-5" />
+                      </button>
+                    )}
+
+                    {/* Status Badge - Top Right */}
+                    <div className="absolute top-3 right-3">
+                      <Badge
+                        variant={
+                          material.status === 'available'
+                            ? 'success'
+                            : material.status === 'in_use'
+                            ? 'warning'
+                            : 'default'
+                        }
+                        className="shadow-lg"
+                      >
+                        {material.status === 'available'
+                          ? 'Disponible'
+                          : material.status === 'in_use'
+                          ? 'En uso'
+                          : 'Mantenimiento'}
+                      </Badge>
+                    </div>
+
+                    {/* Stock Badge - Bottom Right */}
+                    {material.is_low_stock && (
+                      <div className="absolute bottom-3 right-3">
+                        <Badge variant="default" className="bg-destructive/90 backdrop-blur-sm shadow-lg">
+                          Stock Bajo
+                        </Badge>
+                      </div>
+                    )}
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs rounded-full ${
-                      material.status === 'available'
-                        ? 'bg-green-100 text-green-800'
-                        : material.status === 'in_use'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {material.status === 'available'
-                      ? 'Disponible'
-                      : material.status === 'in_use'
-                      ? 'En uso'
-                      : 'Mantenimiento'}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2">{material.description}</p>
-                <div className="text-sm text-gray-500 space-y-1 mb-4">
-                  <p>📍 {material.location?.name}</p>
-                  <p>🔢 Cantidad: {material.quantity} {material.unit}</p>
-                  {material.serial_number && (
-                    <p className="font-mono text-xs">S/N: {material.serial_number}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(material)}
-                    className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition text-sm"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(material.id)}
-                    className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 transition text-sm"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
+
+                  {/* Product Info */}
+                  <div className="p-4 space-y-3">
+                    {/* Title & Category */}
+                    <div>
+                      <h3 className="font-semibold text-foreground text-lg mb-1 line-clamp-1">
+                        {material.name}
+                      </h3>
+                      <p className="text-sm text-primary font-medium">
+                        {material.category?.name}
+                      </p>
+                    </div>
+
+                    {/* Details */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">{material.location?.name || 'Sin ubicación'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Hash className="h-4 w-4 flex-shrink-0" />
+                        <span>
+                          {material.quantity} {material.unit_of_measure || 'unidades'}
+                        </span>
+                      </div>
+                      {material.sku && (
+                        <div className="text-xs text-muted-foreground font-mono bg-secondary/30 px-2 py-1 rounded">
+                          SKU: {material.sku}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <Button
+                        onClick={() => setViewingMaterial(material)}
+                        variant="default"
+                        size="sm"
+                        className="w-full"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={() => handleEdit(material)}
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={() => handleDelete(material.id)}
+                        variant="danger"
+                        size="sm"
+                        className="w-full"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
-      </main>
-    </div>
+
+        {/* Material Detail Modal */}
+        {viewingMaterial && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-2xl">
+                      {viewingMaterial.name}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {viewingMaterial.category?.name}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      viewingMaterial.status === 'available'
+                        ? 'success'
+                        : viewingMaterial.status === 'in_use'
+                        ? 'warning'
+                        : 'default'
+                    }
+                  >
+                    {viewingMaterial.status === 'available'
+                      ? 'Disponible'
+                      : viewingMaterial.status === 'in_use'
+                      ? 'En uso'
+                      : 'Mantenimiento'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Image and QR Code */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Material Image */}
+                  {viewingMaterial.image && (
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground mb-2">
+                        Imagen
+                      </h3>
+                      <img
+                        src={viewingMaterial.image}
+                        alt={viewingMaterial.name}
+                        className="w-full rounded-lg border border-border"
+                      />
+                    </div>
+                  )}
+
+                  {/* QR Code */}
+                  {viewingMaterial.qr_image && (
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                        <QrCode className="h-4 w-4" />
+                        Código QR
+                      </h3>
+                      <div className="bg-white p-4 rounded-lg inline-block">
+                        <img
+                          src={viewingMaterial.qr_image}
+                          alt="QR Code"
+                          className="w-48 h-48"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 font-mono">
+                        {viewingMaterial.qr_code}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Material Information */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">
+                      SKU
+                    </h4>
+                    <p className="text-sm font-medium font-mono">
+                      {viewingMaterial.sku || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">
+                      Ubicación
+                    </h4>
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {viewingMaterial.location?.name || 'Sin ubicación'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">
+                      Cantidad
+                    </h4>
+                    <p className="text-sm font-medium">
+                      {viewingMaterial.quantity} {viewingMaterial.unit_of_measure || 'unidades'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">
+                      Stock Mínimo
+                    </h4>
+                    <p className="text-sm font-medium">
+                      {viewingMaterial.min_stock_level}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {viewingMaterial.description && (
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-2">
+                      Descripción
+                    </h4>
+                    <p className="text-sm text-foreground">
+                      {viewingMaterial.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Close Button */}
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setViewingMaterial(null)}
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
   )
 }

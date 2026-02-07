@@ -5,7 +5,19 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
-import Link from 'next/link'
+import DashboardLayout from '@/components/layout/DashboardLayout'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { Button } from '@/components/ui'
+import { Input } from '@/components/ui'
+import {
+  MapPin,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Building2,
+  Map,
+} from 'lucide-react'
 
 interface LocationFormData {
   name: string
@@ -24,6 +36,7 @@ export default function LocationsPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<LocationFormData>({
     name: '',
     street: '',
@@ -53,10 +66,15 @@ export default function LocationsPage() {
     staleTime: 30000,
   })
 
-  // Normalize paginated response from DRF
   const locations = Array.isArray(locationsResponse)
     ? locationsResponse
     : locationsResponse?.results ?? []
+
+  // Filter locations
+  const filteredLocations = locations.filter((location: any) =>
+    location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    location.full_address?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   const createMutation = useMutation({
     mutationFn: async (data: LocationFormData) => {
@@ -102,7 +120,7 @@ export default function LocationsPage() {
       toast.success('Ubicación eliminada exitosamente')
     },
     onError: (error: any) => {
-      const message = error.response?.data?.message || 'Error al eliminar ubicación. Puede tener materiales asociados.'
+      const message = error.response?.data?.message || 'Error al eliminar ubicación'
       toast.error(message)
     },
   })
@@ -123,7 +141,7 @@ export default function LocationsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: formData })
     } else {
@@ -160,227 +178,271 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-blue-600 hover:text-blue-700">
-              ← Volver
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">Ubicaciones</h1>
+    <DashboardLayout>
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <MapPin className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Ubicaciones</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona las ubicaciones de tu inventario
+              </p>
+            </div>
           </div>
           {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-              disabled={locations.length >= 1}
-            >
-              + Nueva Ubicación
-            </button>
+            <Button onClick={() => setShowForm(true)} size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Nueva Ubicación
+            </Button>
           )}
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {locations.length >= 1 && !showForm && (
-          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Plan Freemium: Máximo 1 ubicación permitida. Actualiza para agregar más.
-            </p>
-          </div>
+        {/* Search */}
+        {!showForm && locations.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Buscar ubicaciones..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {showForm ? (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-6">
-              {editingId ? 'Editar Ubicación' : 'Nueva Ubicación'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre de la Ubicación *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="ej: Almacén Principal, Bodega Norte"
-                />
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {editingId ? 'Editar Ubicación' : 'Nueva Ubicación'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Calle *
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Nombre de la Ubicación *
                   </label>
-                  <input
+                  <Input
                     type="text"
-                    value={formData.street}
-                    onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                    value={formData.name}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ej: Almacén Principal, Bodega Norte"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Número Exterior *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.exterior_number}
-                    onChange={(e) => setFormData({ ...formData, exterior_number: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Calle *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.street}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, street: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Número Exterior *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.exterior_number}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, exterior_number: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Número Interior
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.interior_number}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, interior_number: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Colonia/Barrio *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.neighborhood}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, neighborhood: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Código Postal *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.postal_code}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, postal_code: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Ciudad *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, city: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Estado *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.state}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, state: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      País *
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.country}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, country: e.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Número Interior
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.interior_number}
-                    onChange={(e) => setFormData({ ...formData, interior_number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                <div className="flex gap-4 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    size="lg"
+                  >
+                    {createMutation.isPending || updateMutation.isPending
+                      ? 'Guardando...'
+                      : editingId
+                      ? 'Actualizar Ubicación'
+                      : 'Crear Ubicación'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleCancel}
+                    variant="secondary"
+                    size="lg"
+                  >
+                    Cancelar
+                  </Button>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Colonia/Barrio *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.neighborhood}
-                    onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Código Postal *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.postal_code}
-                    onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ciudad *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Estado *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    País *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {createMutation.isPending || updateMutation.isPending
-                    ? 'Guardando...'
-                    : editingId
-                    ? 'Actualizar'
-                    : 'Crear'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
+              </form>
+            </CardContent>
+          </Card>
         ) : isLoading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
-        ) : locations.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No hay ubicaciones</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Crea al menos una ubicación para poder agregar materiales.
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              + Agregar Ubicación
-            </button>
-          </div>
+        ) : filteredLocations.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                {locations.length === 0 ? 'No hay ubicaciones' : 'No se encontraron resultados'}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                {locations.length === 0
+                  ? 'Crea al menos una ubicación para poder agregar materiales.'
+                  : 'Intenta con otros términos de búsqueda.'}
+              </p>
+              {locations.length === 0 && (
+                <Button onClick={() => setShowForm(true)} size="lg">
+                  <Plus className="h-5 w-5 mr-2" />
+                  Agregar Ubicación
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {locations.map((location: any) => (
-              <div key={location.id} className="bg-white rounded-lg shadow p-6">
-                <h3 className="font-semibold text-gray-900 mb-3">{location.name}</h3>
-                <div className="text-sm text-gray-600 space-y-1 mb-4">
-                  <p>{location.full_address}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(location)}
-                    className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition text-sm"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(location.id)}
-                    className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 transition text-sm"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
+            {filteredLocations.map((location: any) => (
+              <Card key={location.id} className="group hover:shadow-xl transition-all duration-300">
+                <CardContent className="p-6">
+                  {/* Icon */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 bg-primary/10 rounded-lg">
+                      <Map className="h-6 w-6 text-primary" />
+                    </div>
+                  </div>
+
+                  {/* Location Name */}
+                  <h3 className="font-semibold text-foreground text-lg mb-1">
+                    {location.name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                    {location.full_address}
+                  </p>
+
+                  {/* Details */}
+                  <div className="space-y-2 mb-4">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">Ciudad:</span> {location.city}, {location.state}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">CP:</span> {location.postal_code}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={() => handleEdit(location)}
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                    >
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Editar
+                    </Button>
+                    <Button
+                      onClick={() => handleDelete(location.id)}
+                      variant="destructive"
+                      size="sm"
+                      className="w-full"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

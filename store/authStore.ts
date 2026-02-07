@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { User } from '@/types/auth'
 
 interface AuthState {
@@ -12,11 +13,13 @@ interface AuthState {
   initAuth: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  isAuthenticated: false,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
 
   setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('access_token', accessToken)
@@ -81,4 +84,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     }
   },
-}))
+    }),
+    {
+      name: 'auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+)

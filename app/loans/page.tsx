@@ -1,688 +1,759 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import api from '@/lib/api'
-import toast from 'react-hot-toast'
+import { useState } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
+import { useAuthStore } from '@/store/authStore'
+import DashboardLayout from '@/components/layout/DashboardLayout'
+import { Button } from '@/components/ui'
+import { Badge } from '@/components/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import {
+  useLoanRequests,
+  useMyRequests,
+  useApproveLoanRequest,
+  useRejectLoanRequest,
+  useLoans,
+  useMyLoans,
+  useReturnLoan,
+  useLoanExtensions,
+  useApproveExtension,
+  useRejectExtension,
+} from '@/hooks/useLoans'
+import {
+  ArrowLeftRight,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  Package,
+  User,
+} from 'lucide-react'
 
-const QRScanner = dynamic(() => import('@/components/QRScanner'), { ssr: false })
+type TabKey = 'my-requests' | 'all-requests' | 'my-loans' | 'all-loans' | 'extensions'
 
-interface LoanRequestItem {
+interface ApprovalModalState {
+  isOpen: boolean
+  type: 'approve' | 'reject'
   id: number
-  material: number
-  quantity_requested: number
-  material_detail?: {
-    id: number
-    name: string
-    code?: string
-  }
+  notes: string
 }
 
-interface LoanRequest {
-  id: number
-  requester: number
-  requester_detail?: {
-    full_name?: string
-    email?: string
-  }
-  desired_pickup_date?: string
-  desired_return_date?: string
-  purpose?: string
-  status: string
-  items: LoanRequestItem[]
+interface ReturnModalState {
+  isOpen: boolean
+  loanId: number | null
+  condition: string
+  notes: string
 }
-
-interface Loan {
-  id: number
-  borrower: number
-  borrower_detail?: {
-    full_name?: string
-    email?: string
-  }
-  material: number
-  material_detail?: {
-    name?: string
-  }
-  quantity_loaned: number
-  status: string
-  expected_return_date?: string
-  is_overdue?: boolean
-  is_consumable_loan?: boolean
-}
-
-interface LoanExtension {
-  id: number
-  loan: number
-  requested_by_detail?: {
-    full_name?: string
-    email?: string
-  }
-  new_return_date?: string
-  reason?: string
-  status: string
-}
-
-type TabKey = 'requests' | 'loans' | 'extensions'
 
 export default function LoansPage() {
-  const router = useRouter()
-  const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<TabKey>('requests')
-  const [returnLoanId, setReturnLoanId] = useState<number | null>(null)
-  const [returnCondition, setReturnCondition] = useState('good')
-  const [returnNotes, setReturnNotes] = useState('')
-  const [showQRScanner, setShowQRScanner] = useState(false)
-  const [scannedMaterial, setScannedMaterial] = useState<any>(null)
+  const { user } = useAuthStore()
+  const isInventarista = user?.user_type === 'inventarista'
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      router.push('/login')
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    isInventarista ? 'all-requests' : 'my-requests'
+  )
+  const [approvalModal, setApprovalModal] = useState<ApprovalModalState>({
+    isOpen: false,
+    type: 'approve',
+    id: 0,
+    notes: '',
+  })
+  const [returnModal, setReturnModal] = useState<ReturnModalState>({
+    isOpen: false,
+    loanId: null,
+    condition: 'good',
+    notes: '',
+  })
+
+  // Queries
+  const { data: myRequestsData, isLoading: loadingMyRequests } = useMyRequests()
+  const { data: allRequestsData, isLoading: loadingAllRequests } =
+    useLoanRequests()
+  const { data: myLoansData, isLoading: loadingMyLoans } = useMyLoans()
+  const { data: allLoansData, isLoading: loadingAllLoans } = useLoans()
+  const { data: extensionsData, isLoading: loadingExtensions } =
+    useLoanExtensions()
+
+  // Mutations
+  const approveMutation = useApproveLoanRequest()
+  const rejectMutation = useRejectLoanRequest()
+  const returnMutation = useReturnLoan()
+  const approveExtensionMutation = useApproveExtension()
+  const rejectExtensionMutation = useRejectExtension()
+
+  // Extract data arrays
+  const myRequests = Array.isArray(myRequestsData)
+    ? myRequestsData
+    : myRequestsData?.results ?? []
+  const allRequests = Array.isArray(allRequestsData)
+    ? allRequestsData
+    : allRequestsData?.results ?? []
+  const myLoans = Array.isArray(myLoansData) ? myLoansData : myLoansData?.results ?? []
+  const allLoans = Array.isArray(allLoansData)
+    ? allLoansData
+    : allLoansData?.results ?? []
+  const extensions = Array.isArray(extensionsData)
+    ? extensionsData
+    : extensionsData?.results ?? []
+
+  // Handlers
+  const handleOpenApprovalModal = (type: 'approve' | 'reject', id: number) => {
+    setApprovalModal({ isOpen: true, type, id, notes: '' })
+  }
+
+  const handleCloseApprovalModal = () => {
+    setApprovalModal({ isOpen: false, type: 'approve', id: 0, notes: '' })
+  }
+
+  const handleSubmitApproval = () => {
+    if (approvalModal.type === 'approve') {
+      approveMutation.mutate(
+        { id: approvalModal.id, notes: approvalModal.notes },
+        {
+          onSuccess: () => handleCloseApprovalModal(),
+        }
+      )
+    } else {
+      rejectMutation.mutate(
+        { id: approvalModal.id, reason: approvalModal.notes },
+        {
+          onSuccess: () => handleCloseApprovalModal(),
+        }
+      )
     }
-  }, [router])
+  }
 
-  const { data: loanRequestsResponse = [], isLoading: loadingRequests } = useQuery({
-    queryKey: ['loan-requests'],
-    queryFn: async () => {
-      const response = await api.get('/loans/loan-requests/')
-      return response.data
-    },
-  })
+  const handleOpenReturnModal = (loanId: number) => {
+    setReturnModal({ isOpen: true, loanId, condition: 'good', notes: '' })
+  }
 
-  const loanRequests = Array.isArray(loanRequestsResponse)
-    ? loanRequestsResponse
-    : loanRequestsResponse?.results ?? []
+  const handleCloseReturnModal = () => {
+    setReturnModal({ isOpen: false, loanId: null, condition: 'good', notes: '' })
+  }
 
-  const { data: loansResponse = [], isLoading: loadingLoans } = useQuery({
-    queryKey: ['loans'],
-    queryFn: async () => {
-      const response = await api.get('/loans/loans/')
-      return response.data
-    },
-  })
-
-  const loans = Array.isArray(loansResponse)
-    ? loansResponse
-    : loansResponse?.results ?? []
-
-  const { data: extensionsResponse = [], isLoading: loadingExtensions } = useQuery({
-    queryKey: ['loan-extensions'],
-    queryFn: async () => {
-      const response = await api.get('/loans/loan-extensions/')
-      return response.data
-    },
-  })
-
-  const extensions = Array.isArray(extensionsResponse)
-    ? extensionsResponse
-    : extensionsResponse?.results ?? []
-
-  const approveRequestMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      await api.post(`/loans/loan-requests/${id}/approve/`, { notes })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loan-requests'] })
-      toast.success('Solicitud aprobada')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al aprobar solicitud')
-    },
-  })
-
-  const rejectRequestMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      await api.post(`/loans/loan-requests/${id}/reject/`, { notes })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loan-requests'] })
-      toast.success('Solicitud rechazada')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al rechazar solicitud')
-    },
-  })
-
-  const createLoansMutation = useMutation({
-    mutationFn: async (request: LoanRequest) => {
-      for (const item of request.items || []) {
-        await api.post('/loans/loans/', {
-          loan_request: request.id,
-          borrower: request.requester,
-          material: item.material,
-          quantity_loaned: item.quantity_requested,
-          expected_return_date: request.desired_return_date || null,
-          condition_on_pickup: 'good',
-        })
+  const handleSubmitReturn = () => {
+    if (!returnModal.loanId) return
+    returnMutation.mutate(
+      {
+        id: returnModal.loanId,
+        returnData: {
+          condition: returnModal.condition,
+          damage_notes: returnModal.notes,
+        },
+      },
+      {
+        onSuccess: () => handleCloseReturnModal(),
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loans'] })
-      toast.success('Préstamos creados')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al crear préstamos')
-    },
-  })
-
-  const returnLoanMutation = useMutation({
-    mutationFn: async ({ id, condition, notes }: { id: number; condition: string; notes: string }) => {
-      await api.post(`/loans/loans/${id}/return_loan/`, {
-        condition_on_return: condition,
-        damage_notes: notes,
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loans'] })
-      setReturnLoanId(null)
-      setReturnCondition('good')
-      setReturnNotes('')
-      toast.success('Préstamo devuelto')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al registrar devolución')
-    },
-  })
-
-  const approveExtensionMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      await api.post(`/loans/loan-extensions/${id}/approve/`, { notes })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loan-extensions'] })
-      toast.success('Extensión aprobada')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al aprobar extensión')
-    },
-  })
-
-  const rejectExtensionMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      await api.post(`/loans/loan-extensions/${id}/reject/`, { notes })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['loan-extensions'] })
-      toast.success('Extensión rechazada')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al rechazar extensión')
-    },
-  })
-
-  const handleQRScan = async (qrCode: string) => {
-    try {
-      // Buscar material por código QR
-      const response = await api.get(`/materials/materials/?search=${qrCode}`)
-      const materials = Array.isArray(response.data) ? response.data : response.data?.results ?? []
-      
-      if (materials.length > 0) {
-        const material = materials[0]
-        setScannedMaterial(material)
-        toast.success(`Material encontrado: ${material.name}`)
-      } else {
-        toast.error('Material no encontrado')
-      }
-    } catch (error: any) {
-      toast.error('Error al buscar material')
-    }
+    )
   }
 
-  const handleApprove = (id: number) => {
-    const notes = prompt('Notas (opcional):') || ''
-    approveRequestMutation.mutate({ id, notes })
-  }
-
-  const handleReject = (id: number) => {
-    const notes = prompt('Motivo del rechazo (opcional):') || ''
-    rejectRequestMutation.mutate({ id, notes })
-  }
-
-  const handleCreateLoans = (request: LoanRequest) => {
-    if (!request.items || request.items.length === 0) {
-      toast.error('La solicitud no tiene items')
-      return
-    }
-    createLoansMutation.mutate(request)
-  }
-
-  const handleReturnSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!returnLoanId) return
-    returnLoanMutation.mutate({
-      id: returnLoanId,
-      condition: returnCondition,
-      notes: returnNotes,
-    })
-  }
-
-  const handleApproveExtension = (id: number) => {
-    const notes = prompt('Notas (opcional):') || ''
+  const handleApproveExtension = (id: number, notes?: string) => {
     approveExtensionMutation.mutate({ id, notes })
   }
 
-  const handleRejectExtension = (id: number) => {
-    const notes = prompt('Motivo del rechazo (opcional):') || ''
-    rejectExtensionMutation.mutate({ id, notes })
+  const handleRejectExtension = (id: number, reason: string) => {
+    rejectExtensionMutation.mutate({ id, reason })
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-blue-600 hover:text-blue-700">
-              ← Volver
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">Préstamos</h1>
-          </div>
-          <button
-            onClick={() => setShowQRScanner(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-            </svg>
-            Escanear QR
-          </button>
-        </div>
-      </header>
+  // Helper functions
+  const getStatusBadgeVariant = (
+    status: string
+  ): 'default' | 'success' | 'warning' | 'danger' => {
+    switch (status) {
+      case 'approved':
+      case 'active':
+        return 'success'
+      case 'pending':
+        return 'warning'
+      case 'rejected':
+      case 'overdue':
+      case 'lost':
+        return 'danger'
+      default:
+        return 'default'
+    }
+  }
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-2 mb-6">
-          {(['requests', 'loans', 'extensions'] as TabKey[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                activeTab === tab ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border'
-              }`}
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/D'
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  // Tabs configuration
+  const tabs: { key: TabKey; label: string; visible: boolean }[] = [
+    { key: 'my-requests', label: 'Mis Solicitudes', visible: true },
+    {
+      key: 'all-requests',
+      label: 'Todas las Solicitudes',
+      visible: isInventarista,
+    },
+    { key: 'my-loans', label: 'Mis Préstamos', visible: true },
+    { key: 'all-loans', label: 'Todos los Préstamos', visible: isInventarista },
+    { key: 'extensions', label: 'Extensiones', visible: true },
+  ].filter((tab) => tab.visible)
+
+  return (
+    <DashboardLayout>
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <ArrowLeftRight className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Préstamos</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona solicitudes, préstamos activos y extensiones
+              </p>
+            </div>
+          </div>
+          <Link href="/loans/new">
+            <Button>
+              <Package className="h-4 w-4 mr-2" />
+              Nueva Solicitud
+            </Button>
+          </Link>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((tab) => (
+            <Button
+              key={tab.key}
+              variant={activeTab === tab.key ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveTab(tab.key)}
             >
-              {tab === 'requests' && 'Solicitudes'}
-              {tab === 'loans' && 'Préstamos activos'}
-              {tab === 'extensions' && 'Extensiones'}
-            </button>
+              {tab.label}
+            </Button>
           ))}
         </div>
 
-        {activeTab === 'requests' && (
+        {/* My Requests Tab */}
+        {activeTab === 'my-requests' && (
           <div className="space-y-4">
-            {loadingRequests && <div>Cargando solicitudes...</div>}
-            {!loadingRequests && loanRequests.length === 0 && (
-              <div className="text-gray-600">No hay solicitudes.</div>
+            {loadingMyRequests && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Cargando solicitudes...
+                </CardContent>
+              </Card>
             )}
-            {loanRequests.map((req: LoanRequest) => (
-              <div key={req.id} className="bg-white rounded-lg shadow p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-gray-900">Solicitud #{req.id}</div>
-                    <div className="text-sm text-gray-600">
-                      Solicitante: {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
+            {!loadingMyRequests && myRequests.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No tienes solicitudes de préstamo.
+                </CardContent>
+              </Card>
+            )}
+            {myRequests.map((req: any) => (
+              <Card key={req.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">
+                        Solicitud #{req.id}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                        <Package className="h-4 w-4" />
+                        <span>
+                          {req.material_detail?.name || `Material ${req.material}`}
+                        </span>
+                      </div>
                     </div>
+                    <Badge variant={getStatusBadgeVariant(req.status)}>
+                      {req.status}
+                    </Badge>
                   </div>
-                  <span className="text-xs uppercase font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-700">
-                    {req.status}
-                  </span>
-                </div>
-                <div className="mt-3 text-sm text-gray-600">
-                  <div>Entrega deseada: {req.desired_pickup_date || 'N/D'}</div>
-                  <div>Retorno deseado: {req.desired_return_date || 'N/D'}</div>
-                  {req.purpose && <div>Motivo: {req.purpose}</div>}
-                </div>
-
-                <div className="mt-3">
-                  <div className="text-sm font-medium text-gray-700">Items:</div>
-                  <ul className="mt-1 text-sm text-gray-600 list-disc list-inside">
-                    {req.items?.map((item) => (
-                      <li key={item.id}>
-                        {item.material_detail?.name || `Material ${item.material}`} x{item.quantity_requested}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleApprove(req.id)}
-                    className="px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
-                  >
-                    Aprobar
-                  </button>
-                  <button
-                    onClick={() => handleReject(req.id)}
-                    className="px-3 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Rechazar
-                  </button>
-                  <button
-                    onClick={() => handleCreateLoans(req)}
-                    className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    Crear préstamos
-                  </button>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Cantidad</p>
+                      <p className="font-medium">{req.quantity_requested}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Fecha deseada</p>
+                      <p className="font-medium">
+                        {formatDate(req.desired_pickup_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Retorno esperado</p>
+                      <p className="font-medium">
+                        {formatDate(req.desired_return_date)}
+                      </p>
+                    </div>
+                    {req.purpose && (
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground">Propósito</p>
+                        <p className="font-medium">{req.purpose}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
 
-        {activeTab === 'loans' && (
+        {/* All Requests Tab (Inventarista only) */}
+        {activeTab === 'all-requests' && isInventarista && (
           <div className="space-y-4">
-            {loadingLoans && <div>Cargando préstamos...</div>}
-            {!loadingLoans && loans.length === 0 && (
-              <div className="text-gray-600">No hay préstamos activos.</div>
+            {loadingAllRequests && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Cargando solicitudes...
+                </CardContent>
+              </Card>
             )}
-
-            {returnLoanId && (
-              <form onSubmit={handleReturnSubmit} className="bg-white rounded-lg shadow p-5">
-                <div className="font-semibold text-gray-900 mb-3">Registrar devolución</div>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Condición</label>
-                    <select
-                      value={returnCondition}
-                      onChange={(e) => setReturnCondition(e.target.value)}
-                      className="mt-1 w-full border rounded-lg px-3 py-2"
-                    >
-                      <option value="excellent">Excelente</option>
-                      <option value="good">Bueno</option>
-                      <option value="fair">Regular</option>
-                      <option value="poor">Malo</option>
-                      <option value="damaged">Dañado</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Notas</label>
-                    <input
-                      value={returnNotes}
-                      onChange={(e) => setReturnNotes(e.target.value)}
-                      className="mt-1 w-full border rounded-lg px-3 py-2"
-                      placeholder="Daños, observaciones..."
-                    />
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReturnLoanId(null)}
-                    className="px-4 py-2 border rounded-lg"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
+            {!loadingAllRequests && allRequests.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No hay solicitudes pendientes.
+                </CardContent>
+              </Card>
             )}
-
-            {loans.map((loan: Loan) => (
-              <div key={loan.id} className="bg-white rounded-lg shadow p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-gray-900">Préstamo #{loan.id}</div>
-                    <div className="text-sm text-gray-600">
-                      Material: {loan.material_detail?.name || `Material ${loan.material}`}
+            {allRequests.map((req: any) => (
+              <Card key={req.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">
+                        Solicitud #{req.id}
+                      </CardTitle>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>
+                            {req.requester_detail?.full_name ||
+                              req.requester_detail?.email ||
+                              'N/D'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          <span>
+                            {req.material_detail?.name || `Material ${req.material}`}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      Usuario: {loan.borrower_detail?.full_name || loan.borrower_detail?.email || 'N/D'}
+                    <Badge variant={getStatusBadgeVariant(req.status)}>
+                      {req.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Cantidad</p>
+                      <p className="font-medium">{req.quantity_requested}</p>
                     </div>
+                    <div>
+                      <p className="text-muted-foreground">Fecha deseada</p>
+                      <p className="font-medium">
+                        {formatDate(req.desired_pickup_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Retorno esperado</p>
+                      <p className="font-medium">
+                        {formatDate(req.desired_return_date)}
+                      </p>
+                    </div>
+                    {req.purpose && (
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground">Propósito</p>
+                        <p className="font-medium">{req.purpose}</p>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs uppercase font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-700">
-                    {loan.status}
-                  </span>
-                </div>
-                <div className="mt-3 text-sm text-gray-600">
-                  <div>Cantidad: {loan.quantity_loaned}</div>
-                  <div>Retorno esperado: {loan.expected_return_date || 'N/D'}</div>
-                  {loan.is_overdue && <div className="text-red-600">Vencido</div>}
-                </div>
-                {!loan.is_consumable_loan && (loan.status === 'active' || loan.status === 'overdue') && (
-                  <div className="mt-4">
-                    <button
-                      onClick={() => setReturnLoanId(loan.id)}
-                      className="px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
-                    >
-                      Registrar devolución
-                    </button>
-                  </div>
-                )}
-              </div>
+                  {req.status === 'pending' && (
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleOpenApprovalModal('approve', req.id)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Aprobar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleOpenApprovalModal('reject', req.id)}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rechazar
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
 
+        {/* My Loans Tab */}
+        {activeTab === 'my-loans' && (
+          <div className="space-y-4">
+            {loadingMyLoans && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Cargando préstamos...
+                </CardContent>
+              </Card>
+            )}
+            {!loadingMyLoans && myLoans.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No tienes préstamos activos.
+                </CardContent>
+              </Card>
+            )}
+            {myLoans.map((loan: any) => (
+              <Card key={loan.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Préstamo #{loan.id}</CardTitle>
+                      <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                        <Package className="h-4 w-4" />
+                        <span>
+                          {loan.material_detail?.name || `Material ${loan.material}`}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant={getStatusBadgeVariant(loan.status)}>
+                      {loan.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Cantidad</p>
+                      <p className="font-medium">{loan.quantity_loaned}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Fecha de préstamo</p>
+                      <p className="font-medium">{formatDate(loan.issued_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Retorno esperado</p>
+                      <p className="font-medium">
+                        {formatDate(loan.expected_return_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Días restantes</p>
+                      <p
+                        className={`font-medium ${
+                          loan.is_overdue ? 'text-destructive' : ''
+                        }`}
+                      >
+                        {loan.days_until_return} días
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* All Loans Tab (Inventarista only) */}
+        {activeTab === 'all-loans' && isInventarista && (
+          <div className="space-y-4">
+            {loadingAllLoans && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Cargando préstamos...
+                </CardContent>
+              </Card>
+            )}
+            {!loadingAllLoans && allLoans.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No hay préstamos registrados.
+                </CardContent>
+              </Card>
+            )}
+            {allLoans.map((loan: any) => (
+              <Card key={loan.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Préstamo #{loan.id}</CardTitle>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>
+                            {loan.borrower_detail?.full_name ||
+                              loan.borrower_detail?.email ||
+                              'N/D'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          <span>
+                            {loan.material_detail?.name || `Material ${loan.material}`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant={getStatusBadgeVariant(loan.status)}>
+                      {loan.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Cantidad</p>
+                      <p className="font-medium">{loan.quantity_loaned}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Fecha de préstamo</p>
+                      <p className="font-medium">{formatDate(loan.issued_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Retorno esperado</p>
+                      <p className="font-medium">
+                        {formatDate(loan.expected_return_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Días restantes</p>
+                      <p
+                        className={`font-medium ${
+                          loan.is_overdue ? 'text-destructive' : ''
+                        }`}
+                      >
+                        {loan.days_until_return} días
+                      </p>
+                    </div>
+                  </div>
+                  {!loan.is_consumable_loan &&
+                    (loan.status === 'active' || loan.status === 'overdue') && (
+                      <div className="pt-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenReturnModal(loan.id)}
+                        >
+                          Registrar devolución
+                        </Button>
+                      </div>
+                    )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Extensions Tab */}
         {activeTab === 'extensions' && (
           <div className="space-y-4">
-            {loadingExtensions && <div>Cargando extensiones...</div>}
-            {!loadingExtensions && extensions.length === 0 && (
-              <div className="text-gray-600">No hay extensiones.</div>
+            {loadingExtensions && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Cargando extensiones...
+                </CardContent>
+              </Card>
             )}
-            {extensions.map((ext: LoanExtension) => (
-              <div key={ext.id} className="bg-white rounded-lg shadow p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-gray-900">Extensión #{ext.id}</div>
-                    <div className="text-sm text-gray-600">
-                      Solicita: {ext.requested_by_detail?.full_name || ext.requested_by_detail?.email || 'N/D'}
+            {!loadingExtensions && extensions.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No hay solicitudes de extensión.
+                </CardContent>
+              </Card>
+            )}
+            {extensions.map((ext: any) => (
+              <Card key={ext.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Extensión #{ext.id}</CardTitle>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>
+                            {ext.requested_by_detail?.full_name ||
+                              ext.requested_by_detail?.email ||
+                              'N/D'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>Préstamo #{ext.loan}</span>
+                        </div>
+                      </div>
                     </div>
+                    <Badge variant={getStatusBadgeVariant(ext.status)}>
+                      {ext.status}
+                    </Badge>
                   </div>
-                  <span className="text-xs uppercase font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-700">
-                    {ext.status}
-                  </span>
-                </div>
-                <div className="mt-3 text-sm text-gray-600">
-                  <div>Préstamo: #{ext.loan}</div>
-                  <div>Nueva fecha: {ext.new_return_date || 'N/D'}</div>
-                  {ext.reason && <div>Motivo: {ext.reason}</div>}
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => handleApproveExtension(ext.id)}
-                    className="px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
-                  >
-                    Aprobar
-                  </button>
-                  <button
-                    onClick={() => handleRejectExtension(ext.id)}
-                    className="px-3 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Nueva fecha</p>
+                      <p className="font-medium">
+                        {formatDate(ext.new_return_date)}
+                      </p>
+                    </div>
+                    {ext.reason && (
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground">Motivo</p>
+                        <p className="font-medium">{ext.reason}</p>
+                      </div>
+                    )}
+                  </div>
+                  {ext.status === 'pending' && isInventarista && (
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApproveExtension(ext.id)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Aprobar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleRejectExtension(ext.id, 'Rechazado')}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rechazar
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
-      </main>
 
-      {/* QR Scanner Modal */}
-      {showQRScanner && (
-        <QRScanner
-          onScan={handleQRScan}
-          onClose={() => setShowQRScanner(false)}
-        />
-      )}
-
-      {/* Scanned Material Card */}
-      {scannedMaterial && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-start">
-              <h3 className="text-xl font-semibold text-gray-900">Información Completa del Material</h3>
-              <button
-                onClick={() => setScannedMaterial(null)}
-                className="text-gray-400 hover:text-gray-600 transition"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6">
-              {/* Imagen QR */}
-              {scannedMaterial.qr_image && (
-                <div className="mb-6 flex justify-center">
-                  <img 
-                    src={scannedMaterial.qr_image} 
-                    alt="QR Code" 
-                    className="w-48 h-48 border-2 border-gray-200 rounded-lg"
+        {/* Approval Modal */}
+        {approvalModal.isOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>
+                  {approvalModal.type === 'approve' ? 'Aprobar' : 'Rechazar'}{' '}
+                  Solicitud
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    {approvalModal.type === 'approve' ? 'Notas (opcional)' : 'Motivo del rechazo'}
+                  </label>
+                  <textarea
+                    value={approvalModal.notes}
+                    onChange={(e) =>
+                      setApprovalModal((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder={
+                      approvalModal.type === 'approve'
+                        ? 'Notas adicionales...'
+                        : 'Explica el motivo del rechazo...'
+                    }
                   />
                 </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Información Básica */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Información Básica
-                  </h4>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Nombre</p>
-                      <p className="font-semibold text-gray-900">{scannedMaterial.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Código QR</p>
-                      <p className="font-mono text-sm text-gray-900">{scannedMaterial.qr_code}</p>
-                    </div>
-                    {scannedMaterial.description && (
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Descripción</p>
-                        <p className="text-sm text-gray-700">{scannedMaterial.description}</p>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSubmitApproval}
+                    disabled={
+                      approvalModal.type === 'reject' && !approvalModal.notes
+                    }
+                    className="flex-1"
+                  >
+                    Confirmar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseApprovalModal}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
                 </div>
-
-                {/* Categoría y Ubicación */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    Categoría y Ubicación
-                  </h4>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Categoría</p>
-                      <p className="font-medium text-gray-900">
-                        {scannedMaterial.category_detail?.name || 'Sin categoría'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Ubicación</p>
-                      <p className="font-medium text-gray-900">
-                        {scannedMaterial.location_detail?.name || 'Sin ubicación'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Inventario */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    Inventario
-                  </h4>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Cantidad Total</p>
-                      <p className="text-2xl font-bold text-gray-900">{scannedMaterial.quantity}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Disponibles</p>
-                      <p className="text-2xl font-bold text-green-600">{scannedMaterial.available_quantity}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">En Préstamo</p>
-                      <p className="text-2xl font-bold text-yellow-600">
-                        {scannedMaterial.quantity - scannedMaterial.available_quantity}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Estado y Fechas */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Estado y Fechas
-                  </h4>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Estado</p>
-                      <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
-                        scannedMaterial.status === 'available' ? 'bg-green-100 text-green-800' :
-                        scannedMaterial.status === 'on_loan' ? 'bg-yellow-100 text-yellow-800' :
-                        scannedMaterial.status === 'maintenance' ? 'bg-orange-100 text-orange-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {scannedMaterial.status}
-                      </span>
-                    </div>
-                    {scannedMaterial.created_at && (
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Creado</p>
-                        <p className="text-sm text-gray-700">
-                          {new Date(scannedMaterial.created_at).toLocaleDateString('es-ES', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    )}
-                    {scannedMaterial.updated_at && (
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Última Actualización</p>
-                        <p className="text-sm text-gray-700">
-                          {new Date(scannedMaterial.updated_at).toLocaleDateString('es-ES', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Botones de acción */}
-              <div className="mt-6 flex gap-3">
-                <Link
-                  href={`/loans/new?material=${scannedMaterial.id}`}
-                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 text-center font-medium transition shadow-sm hover:shadow"
-                  onClick={() => setScannedMaterial(null)}
-                >
-                  Crear Préstamo con este Material
-                </Link>
-                <button
-                  onClick={() => setScannedMaterial(null)}
-                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Return Modal */}
+        {returnModal.isOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Registrar Devolución</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Condición
+                  </label>
+                  <select
+                    value={returnModal.condition}
+                    onChange={(e) =>
+                      setReturnModal((prev) => ({
+                        ...prev,
+                        condition: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="excellent">Excelente</option>
+                    <option value="good">Bueno</option>
+                    <option value="fair">Regular</option>
+                    <option value="poor">Malo</option>
+                    <option value="damaged">Dañado</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Notas (opcional)
+                  </label>
+                  <textarea
+                    value={returnModal.notes}
+                    onChange={(e) =>
+                      setReturnModal((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Daños, observaciones..."
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSubmitReturn} className="flex-1">
+                    Guardar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseReturnModal}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
   )
 }
