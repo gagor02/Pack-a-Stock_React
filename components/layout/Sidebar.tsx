@@ -15,6 +15,7 @@ import {
   Users,
   BarChart3,
   Settings,
+  QrCode,
   ChevronLeft,
   Moon,
   Sun,
@@ -45,6 +46,12 @@ const navigation = [
     href: '/locations',
     icon: MapPin,
     roles: ['inventarista', 'employee'],
+  },
+  {
+    name: 'Etiquetas',
+    href: '/labels',
+    icon: QrCode,
+    roles: ['inventarista'],
   },
   {
     name: 'Préstamos',

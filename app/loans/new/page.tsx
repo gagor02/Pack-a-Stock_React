@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { Card, Button, Input, Badge } from '@/components/ui'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -47,9 +48,12 @@ interface Employee {
 
 export default function NewLoanPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isScanningRef = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const [isScanning, setIsScanning] = useState(false)
   const [selectedUser, setSelectedUser] = useState<Employee | null>(null)
@@ -70,7 +74,7 @@ export default function NewLoanPage() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await api.get('/users/users/', {
+        const response = await api.get('/auth/users/', {
           params: { user_type: 'employee' }
         })
         setUsers(response.data.results || response.data)
@@ -106,13 +110,9 @@ export default function NewLoanPage() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       })
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-        setIsScanning(true)
-        requestAnimationFrame(scanQRCode)
-      }
+      streamRef.current = stream
+      isScanningRef.current = true
+      setIsScanning(true)
     } catch (error) {
       console.error('Error accessing camera:', error)
       setScanError('No se pudo acceder a la cámara')
@@ -120,18 +120,31 @@ export default function NewLoanPage() {
     }
   }
 
+  // Connect stream to video element after it renders
+  useEffect(() => {
+    if (isScanning && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().then(() => {
+        requestAnimationFrame(scanQRCode)
+      })
+    }
+  }, [isScanning])
+
   const stopScanning = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream
-      stream.getTracks().forEach(track => track.stop())
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
       videoRef.current.srcObject = null
     }
+    isScanningRef.current = false
     setIsScanning(false)
     setScanError(null)
   }
 
   const scanQRCode = () => {
-    if (!isScanning || !videoRef.current || !canvasRef.current) return
+    if (!isScanningRef.current || !videoRef.current || !canvasRef.current) return
 
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -230,23 +243,29 @@ export default function NewLoanPage() {
 
     setIsCreating(true)
     try {
-      const loanData = {
-        borrower: selectedUser.id,
-        materials: selectedMaterials.map(m => ({
+      // Backend expects one loan per material
+      const loanPromises = selectedMaterials.map(m =>
+        api.post('/loans/loans/', {
+          borrower: selectedUser.id,
           material: m.id,
-          quantity: m.quantity
-        })),
-        expected_return_date: returnDate,
-        notes: notes || undefined,
-        status: 'active'
-      }
+          quantity_loaned: m.quantity,
+          expected_return_date: returnDate,
+          condition_on_pickup: 'good'
+        })
+      )
 
-      await api.post('/loans/loans/', loanData)
-      toast.success('Préstamo creado exitosamente')
+      await Promise.all(loanPromises)
+      // Invalidate loans cache so the loans page shows the new loans
+      queryClient.invalidateQueries({ queryKey: ['loans'] })
+      queryClient.invalidateQueries({ queryKey: ['loan-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      toast.success(`${selectedMaterials.length} préstamo(s) creado(s) exitosamente`)
       router.push('/loans')
     } catch (error: any) {
       console.error('Error creating loan:', error)
-      toast.error(error.response?.data?.message || 'Error al crear el préstamo')
+      const detail = error.response?.data
+      const msg = typeof detail === 'object' ? JSON.stringify(detail) : detail
+      toast.error(msg || 'Error al crear el préstamo')
     } finally {
       setIsCreating(false)
     }
@@ -394,7 +413,7 @@ export default function NewLoanPage() {
 
               <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                 <p className="text-sm text-blue-300">
-                  💡 Apunta la cámara al código QR del material
+                  Apunta la cámara al código QR del material
                 </p>
               </div>
             </Card>

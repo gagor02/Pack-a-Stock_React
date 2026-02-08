@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -22,7 +22,10 @@ import {
   Image as ImageIcon,
   Eye,
   QrCode,
+  Camera,
+  X,
 } from 'lucide-react'
+import jsQR from 'jsqr'
 
 interface Category {
   id: number
@@ -42,6 +45,7 @@ interface MaterialFormData {
   category: number | string
   location: number | string
   sku: string
+  serial_number: string
   quantity: number
   min_stock_level: number
   unit_of_measure: string
@@ -61,12 +65,24 @@ export default function MaterialsPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [viewingMaterial, setViewingMaterial] = useState<any | null>(null)
+
+  // QR Scanner state
+  const [isScanning, setIsScanning] = useState(false)
+  const [scannedMaterial, setScannedMaterial] = useState<any | null>(null)
+  const [addStockQuantity, setAddStockQuantity] = useState(1)
+  const [showAddStock, setShowAddStock] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isScanningRef = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null)
+
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
     description: '',
     category: '',
     location: '',
     sku: '',
+    serial_number: '',
     quantity: 1,
     min_stock_level: 1,
     unit_of_measure: 'unit',
@@ -203,6 +219,7 @@ export default function MaterialsPage() {
       category: '',
       location: '',
       sku: '',
+      serial_number: '',
       quantity: 1,
       min_stock_level: 1,
       unit_of_measure: 'unit',
@@ -228,9 +245,10 @@ export default function MaterialsPage() {
     setFormData({
       name: material.name,
       description: material.description || '',
-      category: material.category || '',
-      location: material.location || '',
+      category: material.category?.id || material.category || '',
+      location: material.location?.id || material.location || '',
       sku: material.sku || '',
+      serial_number: material.serial_number || '',
       quantity: material.quantity || 1,
       min_stock_level: material.min_stock_level || 1,
       unit_of_measure: material.unit_of_measure || 'unit',
@@ -252,6 +270,105 @@ export default function MaterialsPage() {
     resetForm()
   }
 
+  // --- QR Scanner functions ---
+  const startScanning = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      })
+      streamRef.current = stream
+      isScanningRef.current = true
+      setIsScanning(true)
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+      toast.error('No se pudo acceder a la cámara')
+    }
+  }
+
+  const stopScanning = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    isScanningRef.current = false
+    setIsScanning(false)
+  }
+
+  useEffect(() => {
+    if (isScanning && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().then(() => {
+        requestAnimationFrame(scanQRCode)
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScanning])
+
+  const scanQRCode = () => {
+    if (!isScanningRef.current || !videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) return
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+      const code = jsQR(imageData.data, imageData.width, imageData.height)
+
+      if (code) {
+        handleQRCodeScanned(code.data)
+        return
+      }
+    }
+
+    requestAnimationFrame(scanQRCode)
+  }
+
+  const handleQRCodeScanned = async (qrCode: string) => {
+    try {
+      stopScanning()
+      const response = await api.get('/materials/materials/search_by_qr/', {
+        params: { qr_code: qrCode }
+      })
+      setScannedMaterial(response.data)
+      toast.success(`Material encontrado: ${response.data.name}`)
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Material no encontrado')
+    }
+  }
+
+  const handleAddStock = async () => {
+    if (!scannedMaterial) return
+
+    try {
+      await api.post(`/materials/materials/${scannedMaterial.id}/add_stock/`, {
+        quantity: addStockQuantity
+      })
+      toast.success(`${addStockQuantity} unidades agregadas al stock`)
+      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      setShowAddStock(false)
+      setScannedMaterial(null)
+      setAddStockQuantity(1)
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Error al agregar stock')
+    }
+  }
+
+  // Check if selected category is consumable (for serial number field visibility)
+  const selectedCategoryIsConsumable = (() => {
+    if (!formData.category) return false
+    const cat = categories.find((c: Category) => c.id === Number(formData.category))
+    return cat?.is_consumable || false
+  })()
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -269,10 +386,16 @@ export default function MaterialsPage() {
             </div>
           </div>
           {!showForm && (
-            <Button onClick={() => setShowForm(true)} size="lg">
-              <Plus className="h-5 w-5 mr-2" />
-              Nuevo Material
-            </Button>
+            <div className="flex gap-3">
+              <Button onClick={startScanning} variant="secondary" size="lg">
+                <Camera className="h-5 w-5 mr-2" />
+                Escanear QR
+              </Button>
+              <Button onClick={() => setShowForm(true)} size="lg">
+                <Plus className="h-5 w-5 mr-2" />
+                Nuevo Material
+              </Button>
+            </div>
           )}
         </div>
         {showForm ? (
@@ -347,6 +470,21 @@ export default function MaterialsPage() {
                     placeholder="Se genera automáticamente"
                   />
                 </div>
+
+                {/* Serial Number - Solo para no consumibles */}
+                {!selectedCategoryIsConsumable && formData.category && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Numero de Serie (opcional)
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.serial_number}
+                      onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                      placeholder="Ej: SN-12345-ABC"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
@@ -753,6 +891,183 @@ export default function MaterialsPage() {
                     onClick={() => setViewingMaterial(null)}
                   >
                     Cerrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        {/* QR Scanner Modal */}
+        {isScanning && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Camera className="h-5 w-5 text-purple-400" />
+                    Escanear Material
+                  </CardTitle>
+                  <button onClick={stopScanning} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                  />
+                  <div className="absolute inset-0 border-4 border-purple-500/50 rounded-lg">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-purple-400 rounded-lg animate-pulse" />
+                  </div>
+                </div>
+                <canvas ref={canvasRef} className="hidden" />
+                <p className="text-sm text-muted-foreground text-center">
+                  Apunta la camara al codigo QR del material
+                </p>
+                <Button onClick={stopScanning} variant="secondary" className="w-full">
+                  Cancelar
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Scanned Material Info Modal */}
+        {scannedMaterial && !showAddStock && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl">{scannedMaterial.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {scannedMaterial.category_detail?.name || scannedMaterial.category_name}
+                    </p>
+                  </div>
+                  <button onClick={() => setScannedMaterial(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Image & QR */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {scannedMaterial.image && (
+                    <div>
+                      <h4 className="text-xs text-muted-foreground mb-2">Imagen</h4>
+                      <img src={scannedMaterial.image} alt={scannedMaterial.name} className="w-full rounded-lg border border-border" />
+                    </div>
+                  )}
+                  {scannedMaterial.qr_image && (
+                    <div>
+                      <h4 className="text-xs text-muted-foreground mb-2">Codigo QR</h4>
+                      <div className="bg-white p-4 rounded-lg inline-block">
+                        <img src={scannedMaterial.qr_image} alt="QR" className="w-32 h-32" />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">{scannedMaterial.qr_code}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">SKU</h4>
+                    <p className="text-sm font-medium font-mono">{scannedMaterial.sku}</p>
+                  </div>
+                  {scannedMaterial.serial_number && (
+                    <div>
+                      <h4 className="text-xs text-muted-foreground mb-1">Numero de Serie</h4>
+                      <p className="text-sm font-medium font-mono">{scannedMaterial.serial_number}</p>
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">Ubicacion</h4>
+                    <p className="text-sm font-medium">{scannedMaterial.location_detail?.name || scannedMaterial.location_name || 'Sin ubicacion'}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">Cantidad Total</h4>
+                    <p className="text-sm font-medium">{scannedMaterial.quantity} {scannedMaterial.unit_of_measure}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">Disponible</h4>
+                    <p className="text-sm font-medium">{scannedMaterial.available_quantity} {scannedMaterial.unit_of_measure}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">Estado</h4>
+                    <Badge variant={scannedMaterial.status === 'available' ? 'success' : 'warning'}>
+                      {scannedMaterial.status === 'available' ? 'Disponible' : scannedMaterial.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                {scannedMaterial.description && (
+                  <div>
+                    <h4 className="text-xs text-muted-foreground mb-1">Descripcion</h4>
+                    <p className="text-sm">{scannedMaterial.description}</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4">
+                  {(scannedMaterial.category_detail?.is_consumable || scannedMaterial.is_consumable) && (
+                    <Button onClick={() => setShowAddStock(true)} className="flex-1">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar Stock
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={() => setScannedMaterial(null)} className="flex-1">
+                    Cerrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Add Stock Modal */}
+        {showAddStock && scannedMaterial && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Agregar Stock</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                  <p className="text-sm font-medium text-foreground">{scannedMaterial.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Stock actual: {scannedMaterial.quantity} {scannedMaterial.unit_of_measure}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Cantidad a agregar
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={addStockQuantity}
+                    onChange={(e) => setAddStockQuantity(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button onClick={handleAddStock} className="flex-1">
+                    Agregar
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowAddStock(false)
+                      setAddStockQuantity(1)
+                    }}
+                    className="flex-1"
+                  >
+                    Cancelar
                   </Button>
                 </div>
               </CardContent>

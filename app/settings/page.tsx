@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery, useQueryClient } from '@tantml:react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -21,6 +21,9 @@ import {
   Camera,
   Save,
   User,
+  History,
+  Trash2,
+  CheckCircle,
 } from 'lucide-react'
 
 interface AccountForm {
@@ -48,6 +51,33 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [logoHistory, setLogoHistory] = useState<string[]>([])
+
+  // Load logo history from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pack-a-stock-logo-history')
+      if (saved) setLogoHistory(JSON.parse(saved))
+    } catch {}
+  }, [])
+
+  const saveLogoToHistory = (logoUrl: string) => {
+    if (!logoUrl) return
+    setLogoHistory((prev) => {
+      const filtered = prev.filter((url) => url !== logoUrl)
+      const updated = [logoUrl, ...filtered].slice(0, 5) // Keep last 5
+      localStorage.setItem('pack-a-stock-logo-history', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const removeLogoFromHistory = (logoUrl: string) => {
+    setLogoHistory((prev) => {
+      const updated = prev.filter((url) => url !== logoUrl)
+      localStorage.setItem('pack-a-stock-logo-history', JSON.stringify(updated))
+      return updated
+    })
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -78,7 +108,16 @@ export default function SettingsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: AccountForm) => {
-      const response = await api.put(`/accounts/accounts/${data.id}/`, data)
+      // Exclude logo and read-only fields - logo is uploaded separately via FormData
+      const { id, subscription_plan, max_users, max_locations, ...cleanData } = data as any
+      // Also remove logo if it's a URL string (not a file)
+      delete cleanData.logo
+      delete cleanData.created_at
+      delete cleanData.updated_at
+      delete cleanData.is_active
+      delete cleanData.subscription_start_date
+      delete cleanData.subscription_end_date
+      const response = await api.patch(`/accounts/accounts/${id}/`, cleanData)
       return response.data
     },
     onSuccess: () => {
@@ -87,7 +126,9 @@ export default function SettingsPage() {
       setIsEditing(false)
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al actualizar cuenta')
+      const detail = error.response?.data
+      const msg = typeof detail === 'object' ? Object.values(detail).flat().join(', ') : detail?.message
+      toast.error(msg || 'Error al actualizar cuenta')
     },
   })
 
@@ -103,10 +144,67 @@ export default function SettingsPage() {
     }
   }
 
+  const handleUploadLogo = async () => {
+    if (!logoFile || !formData) return
+    try {
+      // Save current logo to history before replacing
+      const currentLogo = accounts[0]?.logo
+      if (currentLogo) {
+        saveLogoToHistory(currentLogo)
+      }
+
+      const fd = new FormData()
+      fd.append('logo', logoFile)
+      await api.patch(`/accounts/accounts/${formData.id}/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['account'] })
+      toast.success('Logo actualizado exitosamente')
+      setLogoFile(null)
+      setLogoPreview(null)
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al subir logo')
+    }
+  }
+
+  const handleRestoreLogo = async (logoUrl: string) => {
+    if (!formData) return
+    try {
+      // Save current logo to history
+      const currentLogo = accounts[0]?.logo
+      if (currentLogo) {
+        saveLogoToHistory(currentLogo)
+      }
+
+      // Fetch the old logo file and re-upload it
+      const response = await fetch(logoUrl)
+      const blob = await response.blob()
+      const fileName = logoUrl.split('/').pop() || 'logo.png'
+      const file = new File([blob], fileName, { type: blob.type })
+
+      const fd = new FormData()
+      fd.append('logo', file)
+      await api.patch(`/accounts/accounts/${formData.id}/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['account'] })
+      toast.success('Logo restaurado exitosamente')
+      setLogoPreview(null)
+      setLogoFile(null)
+    } catch (error: any) {
+      toast.error('Error al restaurar logo')
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData) return
     updateMutation.mutate(formData)
+    if (logoFile) {
+      handleUploadLogo()
+    }
   }
 
   if (isLoading || !formData) {
@@ -178,6 +276,12 @@ export default function SettingsPage() {
                           alt="Logo"
                           className="w-full h-full object-cover"
                         />
+                      ) : accounts[0]?.logo ? (
+                        <img
+                          src={accounts[0].logo}
+                          alt="Logo"
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <Building2 className="h-16 w-16 text-primary/60" />
                       )}
@@ -194,6 +298,12 @@ export default function SettingsPage() {
                       </label>
                     )}
                   </div>
+
+                  {isEditing && (
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Este logo aparecerá en las etiquetas impresas
+                    </p>
+                  )}
 
                   <h3 className="text-lg font-semibold text-foreground mb-1">
                     {formData.company_name}
@@ -262,6 +372,53 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Logo History */}
+            {logoHistory.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-sm">Logos Recientes</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-2">
+                    {logoHistory.map((url, index) => (
+                      <div
+                        key={index}
+                        className="group relative aspect-square rounded-lg border border-border overflow-hidden bg-white"
+                      >
+                        <img
+                          src={url}
+                          alt={`Logo ${index + 1}`}
+                          className="w-full h-full object-contain p-1"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleRestoreLogo(url)}
+                            className="p-1.5 bg-primary rounded-full hover:bg-primary/80 transition-colors"
+                            title="Restaurar"
+                          >
+                            <CheckCircle className="h-3 w-3 text-primary-foreground" />
+                          </button>
+                          <button
+                            onClick={() => removeLogoFromHistory(url)}
+                            className="p-1.5 bg-red-600 rounded-full hover:bg-red-500 transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3 w-3 text-white" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Pasa el cursor para restaurar o eliminar
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right Column - Detailed Information */}
