@@ -145,7 +145,7 @@ export default function AdminUsersPage() {
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Plan</p>
-                              <p className="text-base font-medium text-foreground">{u.account?.subscription_plan || 'N/A'}</p>
+                              <p className="text-base font-medium text-foreground">{{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[(u.account?.subscription_plan || '') as string] || 'N/A'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">

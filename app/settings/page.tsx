@@ -315,7 +315,7 @@ export default function SettingsPage() {
                   {/* Plan Badge */}
                   <Badge variant="default" className="mb-2">
                     <CreditCard className="h-3 w-3 mr-1" />
-                    Plan {formData.subscription_plan || 'Freemium'}
+                    Plan {{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[formData.subscription_plan || ''] || 'Freemium'}
                   </Badge>
 
                   {/* Limits */}
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                       Plan de Suscripción
                     </label>
                     <Input
-                      value={formData.subscription_plan || 'Freemium'}
+                      value={{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[(formData.subscription_plan || '') as string] || 'Freemium'}
                       disabled
                       className="bg-secondary/20"
                     />

@@ -297,7 +297,7 @@ export default function DashboardPage() {
               {user?.account?.subscription_plan && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/30 rounded-lg">
                   <Shield className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium text-foreground capitalize">Plan {user.account.subscription_plan}</span>
+                  <span className="text-sm font-medium text-foreground">Plan {{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[user.account.subscription_plan as string] || user.account.subscription_plan}</span>
                 </div>
               )}
               <Badge variant="default" className="text-sm px-3 py-1 capitalize">

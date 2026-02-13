@@ -288,7 +288,7 @@ export default function SubscriptionPage() {
                           <div className="ml-auto flex items-center gap-2">
                             <span className="text-lg font-bold text-foreground">${payment.amount}</span>
                             <Badge variant="success" className="text-xs px-2 py-0.5">
-                              {payment.status === 'completed' ? 'Completado' : payment.status}
+                              {payment.status === 'completed' ? 'Completado' : payment.status === 'failed' ? 'Fallido' : payment.status === 'refunded' ? 'Reembolsado' : payment.status}
                             </Badge>
                           </div>
                         </div>

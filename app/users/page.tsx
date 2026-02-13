@@ -262,7 +262,7 @@ export default function UsersPage() {
               <AlertTriangle className="h-5 w-5 text-yellow-400" />
             </div>
             <p className="text-base text-yellow-300">
-              Has alcanzado el limite de {maxUsers} usuarios para tu plan <strong>{account?.subscription_plan}</strong>.
+              Has alcanzado el limite de {maxUsers} usuarios para tu plan <strong>{{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[(account?.subscription_plan || '') as string] || account?.subscription_plan}</strong>.
               Actualiza tu plan para agregar mas usuarios.
             </p>
           </div>

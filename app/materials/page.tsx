@@ -24,6 +24,13 @@ import {
   QrCode,
   Camera,
   X,
+  History,
+  Clock,
+  User,
+  ArrowRight,
+  BarChart3,
+  Tag,
+  Layers,
 } from 'lucide-react'
 import jsQR from 'jsqr'
 
@@ -53,18 +60,43 @@ interface MaterialFormData {
   is_available_for_loan: boolean
 }
 
+interface LoanHistoryItem {
+  borrower: {
+    id: number
+    full_name: string
+    email: string
+  }
+  quantity_loaned: number
+  issued_at: string
+  expected_return_date: string
+  actual_return_date: string | null
+  status: string
+  condition_on_pickup: string
+  condition_on_return: string | null
+  duration_days: number
+}
+
+interface MaterialHistory {
+  material_name: string
+  total_loans: number
+  active_loans: number
+  top_borrower: string | null
+  history: LoanHistoryItem[]
+}
+
 export default function MaterialsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterLocation, setFilterLocation] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [viewingMaterial, setViewingMaterial] = useState<any | null>(null)
+  const [historyMaterial, setHistoryMaterial] = useState<any | null>(null)
 
   // QR Scanner state
   const [isScanning, setIsScanning] = useState(false)
@@ -132,6 +164,36 @@ export default function MaterialsPage() {
   const locations = Array.isArray(locationsResponse)
     ? locationsResponse
     : locationsResponse?.results ?? []
+
+  // History query
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ['material-history', historyMaterial?.id],
+    queryFn: async () => {
+      const response = await api.get(`/materials/materials/${historyMaterial.id}/history/`)
+      return (response.data?.data || response.data) as MaterialHistory
+    },
+    enabled: !!historyMaterial,
+  })
+
+  // Category counts
+  const categoryCounts = materials.reduce((acc: Record<string, number>, m: any) => {
+    const catName = m.category?.name || m.category_name || 'Sin categoría'
+    acc[catName] = (acc[catName] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  // Filtered materials
+  const filteredMaterials = materials.filter((m: any) => {
+    const matchesSearch = !searchTerm ||
+      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const catName = m.category?.name || m.category_name || 'Sin categoría'
+    const matchesCategory = filterCategory === 'all' || catName === filterCategory
+
+    return matchesSearch && matchesCategory
+  })
 
   const createMutation = useMutation({
     mutationFn: async (data: MaterialFormData) => {
@@ -232,7 +294,7 @@ export default function MaterialsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: formData })
     } else {
@@ -369,19 +431,45 @@ export default function MaterialsPage() {
     return cat?.is_consumable || false
   })()
 
+  const translateUnit = (unit: string) => {
+    const map: Record<string, string> = {
+      unit: 'unidades', set: 'conjuntos', box: 'cajas',
+      package: 'paquetes', meter: 'metros', kg: 'kg', liter: 'litros',
+    }
+    return map[unit] || unit
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return 'border-emerald-500'
+      case 'in_use': return 'border-amber-500'
+      case 'maintenance': return 'border-red-500'
+      default: return 'border-border'
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'available': return 'Disponible'
+      case 'in_use': return 'En uso'
+      case 'maintenance': return 'Mantenimiento'
+      default: return status
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Package className="h-6 w-6 text-primary" />
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl border border-primary/20">
+              <Package className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Materiales</h1>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Materiales</h1>
               <p className="text-sm text-muted-foreground">
-                Gestión de inventario y stock
+                {materials.length} materiales en inventario
               </p>
             </div>
           </div>
@@ -398,8 +486,9 @@ export default function MaterialsPage() {
             </div>
           )}
         </div>
+
         {showForm ? (
-          <Card>
+          <Card className="border-2 shadow-2xl">
             <CardHeader>
               <CardTitle>
                 {editingId ? 'Editar Material' : 'Nuevo Material'}
@@ -409,7 +498,7 @@ export default function MaterialsPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Nombre *
                   </label>
                   <Input
@@ -418,11 +507,12 @@ export default function MaterialsPage() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                     placeholder="Ej: Laptop Dell XPS 15"
+                    className="rounded-xl border-2 text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Categoría *
                   </label>
                   <Input
@@ -430,6 +520,7 @@ export default function MaterialsPage() {
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     required
+                    className="rounded-xl border-2 text-base"
                   >
                     <option value="">Seleccionar categoría</option>
                     {categories.map((cat: Category) => (
@@ -441,7 +532,7 @@ export default function MaterialsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Ubicación *
                   </label>
                   <Input
@@ -449,6 +540,7 @@ export default function MaterialsPage() {
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     required
+                    className="rounded-xl border-2 text-base"
                   >
                     <option value="">Seleccionar ubicación</option>
                     {locations.map((loc: Location) => (
@@ -460,7 +552,7 @@ export default function MaterialsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     SKU (opcional)
                   </label>
                   <Input
@@ -468,13 +560,14 @@ export default function MaterialsPage() {
                     value={formData.sku}
                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                     placeholder="Se genera automáticamente"
+                    className="rounded-xl border-2 text-base"
                   />
                 </div>
 
                 {/* Serial Number - Solo para no consumibles */}
                 {!selectedCategoryIsConsumable && formData.category && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                       Numero de Serie (opcional)
                     </label>
                     <Input
@@ -482,12 +575,13 @@ export default function MaterialsPage() {
                       value={formData.serial_number}
                       onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
                       placeholder="Ej: SN-12345-ABC"
+                      className="rounded-xl border-2 text-base"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Cantidad *
                   </label>
                   <Input
@@ -496,11 +590,12 @@ export default function MaterialsPage() {
                     value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
                     required
+                    className="rounded-xl border-2 text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Stock Mínimo *
                   </label>
                   <Input
@@ -509,11 +604,12 @@ export default function MaterialsPage() {
                     value={formData.min_stock_level}
                     onChange={(e) => setFormData({ ...formData, min_stock_level: parseInt(e.target.value) })}
                     required
+                    className="rounded-xl border-2 text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Unidad de Medida *
                   </label>
                   <Input
@@ -521,6 +617,7 @@ export default function MaterialsPage() {
                     value={formData.unit_of_measure}
                     onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
                     required
+                    className="rounded-xl border-2 text-base"
                   >
                     <option value="unit">Unidad</option>
                     <option value="set">Conjunto</option>
@@ -533,7 +630,7 @@ export default function MaterialsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Estado *
                   </label>
                   <Input
@@ -541,6 +638,7 @@ export default function MaterialsPage() {
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     required
+                    className="rounded-xl border-2 text-base"
                   >
                     <option value="available">Disponible</option>
                     <option value="in_use">En uso</option>
@@ -550,7 +648,7 @@ export default function MaterialsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                   Descripción
                 </label>
                 <Input
@@ -559,12 +657,13 @@ export default function MaterialsPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
                   placeholder="Descripción detallada del material..."
+                  className="rounded-xl border-2 text-base"
                 />
               </div>
 
               {/* Image Upload */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                   <ImageIcon className="h-4 w-4 inline mr-2" />
                   Imagen del Material (opcional)
                 </label>
@@ -626,10 +725,10 @@ export default function MaterialsPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         ) : materials.length === 0 ? (
-          <Card>
+          <Card className="border-dashed border-2">
             <CardContent className="p-12 text-center">
-              <PackageOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
+              <PackageOpen className="mx-auto h-14 w-14 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-medium text-foreground mb-2">
                 No hay materiales
               </h3>
               <p className="text-sm text-muted-foreground mb-6">
@@ -642,186 +741,280 @@ export default function MaterialsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {materials.map((material: any) => (
-              <Card key={material.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300">
-                <CardContent className="p-0">
-                  {/* Product Image */}
-                  <div className="relative aspect-square bg-secondary/20 overflow-hidden">
-                    {material.image ? (
-                      <img
-                        src={material.image}
-                        alt={material.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-secondary/30 to-secondary/10">
-                        <Package className="h-20 w-20 text-muted-foreground/30" />
-                      </div>
-                    )}
+          <>
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, SKU o número de serie..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+            </div>
 
-                    {/* QR Code Button - Top Left */}
-                    {material.qr_image && (
-                      <button
-                        onClick={() => setViewingMaterial(material)}
-                        className="absolute top-3 left-3 p-2 bg-background/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-primary hover:text-primary-foreground transition-all duration-200 opacity-0 group-hover:opacity-100"
-                        title="Ver código QR"
-                      >
-                        <QrCode className="h-5 w-5" />
-                      </button>
-                    )}
+            {/* Category Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setFilterCategory('all')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                  filterCategory === 'all'
+                    ? 'bg-primary text-primary-foreground shadow-lg'
+                    : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                }`}
+              >
+                <Layers className="h-4 w-4" />
+                Todos
+                <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                  filterCategory === 'all' ? 'bg-primary-foreground/20' : 'bg-secondary/50'
+                }`}>
+                  {materials.length}
+                </span>
+              </button>
+              {Object.entries(categoryCounts).map(([catName, count]) => (
+                <button
+                  key={catName}
+                  onClick={() => setFilterCategory(catName)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                    filterCategory === catName
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  <Tag className="h-4 w-4" />
+                  {catName}
+                  <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                    filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-                    {/* Status Badge - Top Right */}
-                    <div className="absolute top-3 right-3">
-                      <Badge
-                        variant={
-                          material.status === 'available'
-                            ? 'success'
-                            : material.status === 'in_use'
-                            ? 'warning'
-                            : 'default'
-                        }
-                        className="shadow-lg"
-                      >
-                        {material.status === 'available'
-                          ? 'Disponible'
-                          : material.status === 'in_use'
-                          ? 'En uso'
-                          : 'Mantenimiento'}
-                      </Badge>
-                    </div>
+            {/* Materials Grid */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredMaterials.map((material: any) => (
+                <Card
+                  key={material.id}
+                  className={`group overflow-hidden hover:shadow-xl transition-all duration-300 border-l-4 ${getStatusColor(material.status)}`}
+                >
+                  <CardContent className="p-0">
+                    {/* Product Image */}
+                    <div className="relative aspect-[4/3] bg-secondary/20 overflow-hidden">
+                      {material.image ? (
+                        <img
+                          src={material.image}
+                          alt={material.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-secondary/30 to-secondary/10">
+                          <Package className="h-16 w-16 text-muted-foreground/30" />
+                        </div>
+                      )}
 
-                    {/* Stock Badge - Bottom Right */}
-                    {material.is_low_stock && (
-                      <div className="absolute bottom-3 right-3">
-                        <Badge variant="default" className="bg-destructive/90 backdrop-blur-sm shadow-lg">
-                          Stock Bajo
+                      {/* QR Code Mini - Top Left */}
+                      {material.qr_image && (
+                        <div className="absolute top-2 left-2 p-1.5 bg-white rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200">
+                          <img
+                            src={material.qr_image}
+                            alt="QR"
+                            className="w-10 h-10"
+                          />
+                        </div>
+                      )}
+
+                      {/* Status Badge - Top Right */}
+                      <div className="absolute top-2 right-2">
+                        <Badge
+                          variant={
+                            material.status === 'available'
+                              ? 'success'
+                              : material.status === 'in_use'
+                              ? 'warning'
+                              : 'default'
+                          }
+                          className="shadow-lg text-xs"
+                        >
+                          {getStatusLabel(material.status)}
                         </Badge>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Product Info */}
-                  <div className="p-4 space-y-3">
-                    {/* Title & Category */}
-                    <div>
-                      <h3 className="font-semibold text-foreground text-lg mb-1 line-clamp-1">
-                        {material.name}
-                      </h3>
-                      <p className="text-sm text-primary font-medium">
-                        {material.category?.name}
-                      </p>
-                    </div>
-
-                    {/* Details */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate">{material.location?.name || 'Sin ubicación'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Hash className="h-4 w-4 flex-shrink-0" />
-                        <span>
-                          {material.quantity} {material.unit_of_measure || 'unidades'}
-                        </span>
-                      </div>
-                      {material.sku && (
-                        <div className="text-xs text-muted-foreground font-mono bg-secondary/30 px-2 py-1 rounded">
-                          SKU: {material.sku}
+                      {/* Stock Badge - Bottom Right */}
+                      {material.is_low_stock && (
+                        <div className="absolute bottom-2 right-2">
+                          <Badge variant="default" className="bg-destructive/90 backdrop-blur-sm shadow-lg text-xs">
+                            Stock Bajo
+                          </Badge>
                         </div>
                       )}
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <Button
-                        onClick={() => setViewingMaterial(material)}
-                        variant="default"
-                        size="sm"
-                        className="w-full"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleEdit(material)}
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(material.id)}
-                        variant="danger"
-                        size="sm"
-                        className="w-full"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    {/* Product Info */}
+                    <div className="p-4 space-y-3">
+                      {/* Title & Category */}
+                      <div>
+                        <h3 className="font-semibold text-foreground text-base mb-1 line-clamp-1">
+                          {material.name}
+                        </h3>
+                        <p className="text-xs text-primary font-medium uppercase tracking-wider">
+                          {material.category?.name || material.category_name}
+                        </p>
+                      </div>
+
+                      {/* Key Info Blocks */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-secondary/20 rounded-lg px-2.5 py-1.5">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Ubicación</p>
+                          <p className="text-xs font-medium text-foreground truncate flex items-center gap-1">
+                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                            {material.location?.name || material.location_name || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="bg-secondary/20 rounded-lg px-2.5 py-1.5">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Stock</p>
+                          <p className="text-xs font-medium text-foreground flex items-center gap-1">
+                            <Hash className="h-3 w-3 flex-shrink-0" />
+                            {material.quantity} {translateUnit(material.unit_of_measure || 'unit')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Serial / SKU Row */}
+                      {(material.serial_number || material.sku) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {material.serial_number && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md">
+                              SN: {material.serial_number}
+                            </span>
+                          )}
+                          {material.sku && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-secondary/40 text-muted-foreground px-2 py-0.5 rounded-md">
+                              SKU: {material.sku}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        <Button
+                          onClick={() => setViewingMaterial(material)}
+                          variant="default"
+                          size="sm"
+                          className="w-full"
+                          title="Ver detalle"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          onClick={() => setHistoryMaterial(material)}
+                          variant="secondary"
+                          size="sm"
+                          className="w-full"
+                          title="Historial de préstamos"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          onClick={() => handleEdit(material)}
+                          variant="secondary"
+                          size="sm"
+                          className="w-full"
+                          title="Editar"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          onClick={() => handleDelete(material.id)}
+                          variant="danger"
+                          size="sm"
+                          className="w-full"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* No results after filter */}
+            {filteredMaterials.length === 0 && materials.length > 0 && (
+              <Card className="border-dashed border-2">
+                <CardContent className="p-12 text-center">
+                  <Search className="mx-auto h-14 w-14 text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-medium text-foreground mb-2">
+                    Sin resultados
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    No se encontraron materiales con los filtros aplicados.
+                  </p>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {/* Material Detail Modal */}
         {viewingMaterial && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border-2 shadow-2xl">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-2xl">
                       {viewingMaterial.name}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {viewingMaterial.category?.name}
+                    <p className="text-sm text-primary font-medium mt-1">
+                      {viewingMaterial.category?.name || viewingMaterial.category_name}
                     </p>
                   </div>
-                  <Badge
-                    variant={
-                      viewingMaterial.status === 'available'
-                        ? 'success'
-                        : viewingMaterial.status === 'in_use'
-                        ? 'warning'
-                        : 'default'
-                    }
-                  >
-                    {viewingMaterial.status === 'available'
-                      ? 'Disponible'
-                      : viewingMaterial.status === 'in_use'
-                      ? 'En uso'
-                      : 'Mantenimiento'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        viewingMaterial.status === 'available'
+                          ? 'success'
+                          : viewingMaterial.status === 'in_use'
+                          ? 'warning'
+                          : 'default'
+                      }
+                    >
+                      {getStatusLabel(viewingMaterial.status)}
+                    </Badge>
+                    <button onClick={() => setViewingMaterial(null)} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Image and QR Code */}
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* Material Image */}
                   {viewingMaterial.image && (
                     <div>
-                      <h3 className="text-sm font-medium text-foreground mb-2">
+                      <h3 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">
                         Imagen
                       </h3>
                       <img
                         src={viewingMaterial.image}
                         alt={viewingMaterial.name}
-                        className="w-full rounded-lg border border-border"
+                        className="w-full rounded-xl border-2 border-border"
                       />
                     </div>
                   )}
 
-                  {/* QR Code */}
                   {viewingMaterial.qr_image && (
                     <div>
-                      <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                      <h3 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2 flex items-center gap-2">
                         <QrCode className="h-4 w-4" />
                         Código QR
                       </h3>
-                      <div className="bg-white p-4 rounded-lg inline-block">
+                      <div className="bg-white p-4 rounded-xl inline-block">
                         <img
                           src={viewingMaterial.qr_image}
                           alt="QR Code"
@@ -836,58 +1029,80 @@ export default function MaterialsPage() {
                 </div>
 
                 {/* Material Information */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                       SKU
                     </h4>
-                    <p className="text-sm font-medium font-mono">
+                    <p className="text-base font-medium font-mono text-foreground">
                       {viewingMaterial.sku || 'N/A'}
                     </p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">
+                  {viewingMaterial.serial_number && (
+                    <div className="bg-primary/10 rounded-xl p-3">
+                      <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                        Numero de Serie
+                      </h4>
+                      <p className="text-base font-medium font-mono text-primary">
+                        {viewingMaterial.serial_number}
+                      </p>
+                    </div>
+                  )}
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                       Ubicación
                     </h4>
-                    <p className="text-sm font-medium flex items-center gap-2">
+                    <p className="text-base font-medium flex items-center gap-2 text-foreground">
                       <MapPin className="h-4 w-4" />
-                      {viewingMaterial.location?.name || 'Sin ubicación'}
+                      {viewingMaterial.location?.name || viewingMaterial.location_name || 'Sin ubicación'}
                     </p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                       Cantidad
                     </h4>
-                    <p className="text-sm font-medium">
-                      {viewingMaterial.quantity} {viewingMaterial.unit_of_measure || 'unidades'}
+                    <p className="text-base font-medium text-foreground">
+                      {viewingMaterial.quantity} {translateUnit(viewingMaterial.unit_of_measure || 'unit')}
                     </p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                       Stock Mínimo
                     </h4>
-                    <p className="text-sm font-medium">
+                    <p className="text-base font-medium text-foreground">
                       {viewingMaterial.min_stock_level}
                     </p>
                   </div>
                 </div>
 
-                {/* Description */}
                 {viewingMaterial.description && (
                   <div>
-                    <h4 className="text-xs text-muted-foreground mb-2">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">
                       Descripción
                     </h4>
-                    <p className="text-sm text-foreground">
+                    <p className="text-base text-foreground">
                       {viewingMaterial.description}
                     </p>
                   </div>
                 )}
 
-                {/* Close Button */}
-                <div className="flex justify-end gap-2 pt-4">
+                <div className="grid grid-cols-2 gap-3 pt-4">
                   <Button
                     variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
+                    onClick={() => {
+                      setViewingMaterial(null)
+                      setHistoryMaterial(viewingMaterial)
+                    }}
+                  >
+                    <History className="h-5 w-5 mr-2" />
+                    Ver Historial
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
                     onClick={() => setViewingMaterial(null)}
                   >
                     Cerrar
@@ -897,14 +1112,154 @@ export default function MaterialsPage() {
             </Card>
           </div>
         )}
+
+        {/* History Modal */}
+        {historyMaterial && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border-2 shadow-2xl">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-2xl flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-xl">
+                        <History className="h-6 w-6 text-primary" />
+                      </div>
+                      Historial de Préstamos
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {historyMaterial.name}
+                    </p>
+                  </div>
+                  <button onClick={() => setHistoryMaterial(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {historyLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                  </div>
+                ) : historyData ? (
+                  <>
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-4 rounded-xl border-2 border-border/50 text-center">
+                        <p className="text-2xl font-bold text-foreground">{historyData.total_loans}</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Total Préstamos</p>
+                      </div>
+                      <div className="p-4 rounded-xl border-2 border-border/50 text-center">
+                        <p className="text-2xl font-bold text-amber-500">{historyData.active_loans}</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Activos</p>
+                      </div>
+                      <div className="p-4 rounded-xl border-2 border-border/50 text-center">
+                        <p className="text-sm font-bold text-foreground truncate">{historyData.top_borrower || '-'}</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Top Solicitante</p>
+                      </div>
+                    </div>
+
+                    {/* Loan Timeline */}
+                    {!historyData.history || historyData.history.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Clock className="mx-auto h-12 w-12 text-muted-foreground/30 mb-3" />
+                        <p className="text-muted-foreground">No hay préstamos registrados</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {historyData.history.map((loan, idx) => {
+                          const isActive = loan.status === 'approved' || loan.status === 'active'
+                          const isReturned = loan.status === 'returned'
+                          const isOverdue = loan.status === 'overdue'
+                          return (
+                            <div
+                              key={idx}
+                              className={`p-4 rounded-xl border-2 border-l-4 ${
+                                isActive
+                                  ? 'border-l-amber-500 border-border/50'
+                                  : isOverdue
+                                  ? 'border-l-red-500 border-border/50'
+                                  : 'border-l-emerald-500 border-border/50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-medium text-foreground">
+                                    {loan.borrower.full_name}
+                                  </span>
+                                </div>
+                                <Badge
+                                  variant={isActive ? 'warning' : isOverdue ? 'default' : 'success'}
+                                  className={isOverdue ? 'bg-red-500/20 text-red-400' : ''}
+                                >
+                                  {isActive ? 'Activo' : isOverdue ? 'Vencido' : 'Devuelto'}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-secondary/20 rounded-lg px-3 py-2">
+                                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
+                                  <p className="text-sm font-medium text-foreground">{loan.quantity_loaned}</p>
+                                </div>
+                                <div className="bg-secondary/20 rounded-lg px-3 py-2">
+                                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Duración</p>
+                                  <p className="text-sm font-medium text-foreground">{loan.duration_days} días</p>
+                                </div>
+                                <div className="bg-secondary/20 rounded-lg px-3 py-2">
+                                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Fecha Préstamo</p>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {new Date(loan.issued_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                  </p>
+                                </div>
+                                <div className="bg-secondary/20 rounded-lg px-3 py-2">
+                                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                                    {loan.actual_return_date ? 'Devuelto' : 'Vence'}
+                                  </p>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {loan.actual_return_date
+                                      ? new Date(loan.actual_return_date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                      : new Date(loan.expected_return_date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                              {loan.condition_on_return && loan.condition_on_return !== loan.condition_on_pickup && (
+                                <div className="mt-2 text-xs text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg">
+                                  Condición al devolver: {loan.condition_on_return}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Error al cargar historial</p>
+                  </div>
+                )}
+
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="w-full text-base py-3"
+                  onClick={() => setHistoryMaterial(null)}
+                >
+                  Cerrar
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* QR Scanner Modal */}
         {isScanning && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
+            <Card className="w-full max-w-md border-2 shadow-2xl">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Camera className="h-5 w-5 text-purple-400" />
+                    <Camera className="h-5 w-5 text-primary" />
                     Escanear Material
                   </CardTitle>
                   <button onClick={stopScanning} className="text-muted-foreground hover:text-foreground">
@@ -913,14 +1268,14 @@ export default function MaterialsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+                <div className="relative bg-black rounded-xl overflow-hidden aspect-video">
                   <video
                     ref={videoRef}
                     className="w-full h-full object-cover"
                     playsInline
                   />
-                  <div className="absolute inset-0 border-4 border-purple-500/50 rounded-lg">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-purple-400 rounded-lg animate-pulse" />
+                  <div className="absolute inset-0 border-4 border-primary/50 rounded-xl">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-primary rounded-lg animate-pulse" />
                   </div>
                 </div>
                 <canvas ref={canvasRef} className="hidden" />
@@ -938,7 +1293,7 @@ export default function MaterialsPage() {
         {/* Scanned Material Info Modal */}
         {scannedMaterial && !showAddStock && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border-2 shadow-2xl">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -957,14 +1312,14 @@ export default function MaterialsPage() {
                 <div className="grid md:grid-cols-2 gap-4">
                   {scannedMaterial.image && (
                     <div>
-                      <h4 className="text-xs text-muted-foreground mb-2">Imagen</h4>
-                      <img src={scannedMaterial.image} alt={scannedMaterial.name} className="w-full rounded-lg border border-border" />
+                      <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Imagen</h4>
+                      <img src={scannedMaterial.image} alt={scannedMaterial.name} className="w-full rounded-xl border-2 border-border" />
                     </div>
                   )}
                   {scannedMaterial.qr_image && (
                     <div>
-                      <h4 className="text-xs text-muted-foreground mb-2">Codigo QR</h4>
-                      <div className="bg-white p-4 rounded-lg inline-block">
+                      <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Codigo QR</h4>
+                      <div className="bg-white p-4 rounded-xl inline-block">
                         <img src={scannedMaterial.qr_image} alt="QR" className="w-32 h-32" />
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 font-mono">{scannedMaterial.qr_code}</p>
@@ -973,53 +1328,53 @@ export default function MaterialsPage() {
                 </div>
 
                 {/* Details */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">SKU</h4>
-                    <p className="text-sm font-medium font-mono">{scannedMaterial.sku}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">SKU</h4>
+                    <p className="text-base font-medium font-mono text-foreground">{scannedMaterial.sku}</p>
                   </div>
                   {scannedMaterial.serial_number && (
-                    <div>
-                      <h4 className="text-xs text-muted-foreground mb-1">Numero de Serie</h4>
-                      <p className="text-sm font-medium font-mono">{scannedMaterial.serial_number}</p>
+                    <div className="bg-primary/10 rounded-xl p-3">
+                      <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Numero de Serie</h4>
+                      <p className="text-base font-medium font-mono text-primary">{scannedMaterial.serial_number}</p>
                     </div>
                   )}
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">Ubicacion</h4>
-                    <p className="text-sm font-medium">{scannedMaterial.location_detail?.name || scannedMaterial.location_name || 'Sin ubicacion'}</p>
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Ubicacion</h4>
+                    <p className="text-base font-medium text-foreground">{scannedMaterial.location_detail?.name || scannedMaterial.location_name || 'Sin ubicacion'}</p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">Cantidad Total</h4>
-                    <p className="text-sm font-medium">{scannedMaterial.quantity} {scannedMaterial.unit_of_measure}</p>
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Cantidad Total</h4>
+                    <p className="text-base font-medium text-foreground">{scannedMaterial.quantity} {translateUnit(scannedMaterial.unit_of_measure || 'unit')}</p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">Disponible</h4>
-                    <p className="text-sm font-medium">{scannedMaterial.available_quantity} {scannedMaterial.unit_of_measure}</p>
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Disponible</h4>
+                    <p className="text-base font-medium text-foreground">{scannedMaterial.available_quantity} {translateUnit(scannedMaterial.unit_of_measure || 'unit')}</p>
                   </div>
-                  <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">Estado</h4>
+                  <div className="bg-secondary/20 rounded-xl p-3">
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Estado</h4>
                     <Badge variant={scannedMaterial.status === 'available' ? 'success' : 'warning'}>
-                      {scannedMaterial.status === 'available' ? 'Disponible' : scannedMaterial.status}
+                      {getStatusLabel(scannedMaterial.status)}
                     </Badge>
                   </div>
                 </div>
 
                 {scannedMaterial.description && (
                   <div>
-                    <h4 className="text-xs text-muted-foreground mb-1">Descripcion</h4>
-                    <p className="text-sm">{scannedMaterial.description}</p>
+                    <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Descripcion</h4>
+                    <p className="text-base text-foreground">{scannedMaterial.description}</p>
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-4">
+                <div className="grid grid-cols-2 gap-3 pt-4">
                   {(scannedMaterial.category_detail?.is_consumable || scannedMaterial.is_consumable) && (
-                    <Button onClick={() => setShowAddStock(true)} className="flex-1">
+                    <Button onClick={() => setShowAddStock(true)} size="lg" className="text-base py-3">
                       <Plus className="h-4 w-4 mr-2" />
                       Agregar Stock
                     </Button>
                   )}
-                  <Button variant="secondary" onClick={() => setScannedMaterial(null)} className="flex-1">
+                  <Button variant="secondary" onClick={() => setScannedMaterial(null)} size="lg" className="text-base py-3">
                     Cerrar
                   </Button>
                 </div>
@@ -1031,20 +1386,20 @@ export default function MaterialsPage() {
         {/* Add Stock Modal */}
         {showAddStock && scannedMaterial && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
+            <Card className="w-full max-w-md border-2 shadow-2xl">
               <CardHeader>
                 <CardTitle>Agregar Stock</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl">
                   <p className="text-sm font-medium text-foreground">{scannedMaterial.name}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Stock actual: {scannedMaterial.quantity} {scannedMaterial.unit_of_measure}
+                    Stock actual: {scannedMaterial.quantity} {translateUnit(scannedMaterial.unit_of_measure || 'unit')}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-medium uppercase tracking-wider text-muted-foreground mb-2">
                     Cantidad a agregar
                   </label>
                   <Input
@@ -1052,20 +1407,22 @@ export default function MaterialsPage() {
                     min="1"
                     value={addStockQuantity}
                     onChange={(e) => setAddStockQuantity(parseInt(e.target.value) || 1)}
+                    className="rounded-xl border-2 text-base"
                   />
                 </div>
 
-                <div className="flex gap-3">
-                  <Button onClick={handleAddStock} className="flex-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <Button onClick={handleAddStock} size="lg" className="text-base py-3">
                     Agregar
                   </Button>
                   <Button
                     variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
                     onClick={() => {
                       setShowAddStock(false)
                       setAddStockQuantity(1)
                     }}
-                    className="flex-1"
                   >
                     Cancelar
                   </Button>
