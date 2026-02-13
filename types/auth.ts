@@ -5,6 +5,7 @@ export interface User {
   first_name?: string
   last_name?: string
   user_type: 'inventarista' | 'empleado'
+  is_superuser?: boolean
   account: any
   is_active: boolean
 }

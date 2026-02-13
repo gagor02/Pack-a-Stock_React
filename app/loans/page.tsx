@@ -383,67 +383,76 @@ export default function LoansPage() {
               <EmptyState message="No tienes solicitudes de prestamo" />
             ) : (
               <div className="space-y-5">
-                {myRequests.map((req: any) => (
-                  <Card
-                    key={req.id}
-                    className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-xl transition-all duration-300 overflow-hidden`}
-                  >
-                    <CardContent className="p-0">
-                      <div className="flex flex-col gap-4 p-5">
-                        <div className="flex-1 min-w-0">
-                          {/* Name + Badge */}
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2.5 rounded-xl bg-primary/10">
-                              <Package className="h-6 w-6 text-primary" />
+                {myRequests.map((req: any) => {
+                  const items = req.items || []
+                  const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
+                  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
+                  return (
+                    <Card
+                      key={req.id}
+                      className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-xl transition-all duration-300 overflow-hidden`}
+                    >
+                      <CardContent className="p-0">
+                        <div className="flex flex-col gap-4 p-5">
+                          <div className="flex-1 min-w-0">
+                            {/* Name + Badge */}
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2.5 rounded-xl bg-primary/10">
+                                <Package className="h-6 w-6 text-primary" />
+                              </div>
+                              <h3 className="text-lg font-bold text-foreground truncate">
+                                {itemNames || 'Sin materiales'}
+                              </h3>
+                              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                                <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
+                                  {getStatusLabel(req.status)}
+                                </Badge>
+                                <span className="text-sm text-muted-foreground font-medium">#{req.id}</span>
+                              </div>
                             </div>
-                            <h3 className="text-lg font-bold text-foreground">
-                              {req.material_detail?.name || `Material #${req.material}`}
-                            </h3>
-                            <div className="ml-auto flex items-center gap-2">
-                              <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
-                                {getStatusLabel(req.status)}
-                              </Badge>
-                              <span className="text-sm text-muted-foreground font-medium">#{req.id}</span>
-                            </div>
-                          </div>
 
-                          {/* Details */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <Package className="h-4 w-4 text-primary" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
-                                <p className="text-base font-medium text-foreground">x{req.quantity_requested}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                              <div className="p-2 bg-blue-500/10 rounded-lg">
-                                <Calendar className="h-4 w-4 text-blue-400" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolucion</p>
-                                <p className="text-base font-medium text-foreground">{formatDate(req.desired_return_date)}</p>
-                              </div>
-                            </div>
-                            {req.purpose && (
+                            {/* Details */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                                <div className="p-2 bg-green-500/10 rounded-lg">
-                                  <ClipboardList className="h-4 w-4 text-green-400" />
+                                <div className="p-2 bg-primary/10 rounded-lg">
+                                  <Package className="h-4 w-4 text-primary" />
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Motivo</p>
-                                  <p className="text-base font-medium text-foreground truncate">{req.purpose}</p>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
+                                  <p className="text-base font-medium text-foreground">
+                                    {items.length > 1
+                                      ? `${items.length} materiales (${totalQty} uds)`
+                                      : `x${totalQty}`}
+                                  </p>
                                 </div>
                               </div>
-                            )}
+                              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                  <Calendar className="h-4 w-4 text-blue-400" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolucion</p>
+                                  <p className="text-base font-medium text-foreground">{formatDate(req.desired_return_date)}</p>
+                                </div>
+                              </div>
+                              {req.purpose && (
+                                <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                                  <div className="p-2 bg-green-500/10 rounded-lg">
+                                    <ClipboardList className="h-4 w-4 text-green-400" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Motivo</p>
+                                    <p className="text-base font-medium text-foreground truncate">{req.purpose}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             )}
           </>
@@ -456,89 +465,98 @@ export default function LoansPage() {
               <EmptyState message="No hay solicitudes pendientes" />
             ) : (
               <div className="space-y-5">
-                {allRequests.map((req: any) => (
-                  <Card
-                    key={req.id}
-                    className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-xl transition-all duration-300 overflow-hidden`}
-                  >
-                    <CardContent className="p-0">
-                      <div className="flex flex-col gap-4 p-5">
-                        <div className="flex-1 min-w-0">
-                          {/* Name + Badge */}
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2.5 rounded-xl bg-primary/10">
-                              <User className="h-6 w-6 text-primary" />
+                {allRequests.map((req: any) => {
+                  const items = req.items || []
+                  const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
+                  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
+                  return (
+                    <Card
+                      key={req.id}
+                      className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-xl transition-all duration-300 overflow-hidden`}
+                    >
+                      <CardContent className="p-0">
+                        <div className="flex flex-col gap-4 p-5">
+                          <div className="flex-1 min-w-0">
+                            {/* Name + Badge */}
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2.5 rounded-xl bg-primary/10">
+                                <User className="h-6 w-6 text-primary" />
+                              </div>
+                              <h3 className="text-lg font-bold text-foreground">
+                                {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
+                              </h3>
+                              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                                <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
+                                  {getStatusLabel(req.status)}
+                                </Badge>
+                                <span className="text-sm text-muted-foreground font-medium">#{req.id}</span>
+                              </div>
                             </div>
-                            <h3 className="text-lg font-bold text-foreground">
-                              {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
-                            </h3>
-                            <div className="ml-auto flex items-center gap-2">
-                              <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
-                                {getStatusLabel(req.status)}
-                              </Badge>
-                              <span className="text-sm text-muted-foreground font-medium">#{req.id}</span>
+
+                            {/* Details */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                                <div className="p-2 bg-primary/10 rounded-lg">
+                                  <Package className="h-4 w-4 text-primary" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Material</p>
+                                  <p className="text-base font-medium text-foreground truncate">{itemNames || 'Sin materiales'}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                  <Package className="h-4 w-4 text-blue-400" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
+                                  <p className="text-base font-medium text-foreground">
+                                    {items.length > 1
+                                      ? `${items.length} materiales (${totalQty} uds)`
+                                      : `x${totalQty}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                                <div className="p-2 bg-green-500/10 rounded-lg">
+                                  <Calendar className="h-4 w-4 text-green-400" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolucion</p>
+                                  <p className="text-base font-medium text-foreground">{formatDate(req.desired_return_date)}</p>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Details */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <Package className="h-4 w-4 text-primary" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Material</p>
-                                <p className="text-base font-medium text-foreground truncate">{req.material_detail?.name || `#${req.material}`}</p>
-                              </div>
+                          {/* Actions */}
+                          {req.status === 'pending' && (
+                            <div className="grid grid-cols-2 gap-3 w-full pt-2 border-t border-border/30 mt-2">
+                              <Button
+                                onClick={() => handleOpenApprovalModal('approve', req.id)}
+                                variant="primary"
+                                size="lg"
+                                className="w-full text-base py-3"
+                              >
+                                <CheckCircle className="h-5 w-5 mr-2" />
+                                Aprobar
+                              </Button>
+                              <Button
+                                onClick={() => handleOpenApprovalModal('reject', req.id)}
+                                variant="destructive"
+                                size="lg"
+                                className="w-full text-base py-3"
+                              >
+                                <XCircle className="h-5 w-5 mr-2" />
+                                Rechazar
+                              </Button>
                             </div>
-                            <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                              <div className="p-2 bg-blue-500/10 rounded-lg">
-                                <Package className="h-4 w-4 text-blue-400" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
-                                <p className="text-base font-medium text-foreground">x{req.quantity_requested}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                              <div className="p-2 bg-green-500/10 rounded-lg">
-                                <Calendar className="h-4 w-4 text-green-400" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolucion</p>
-                                <p className="text-base font-medium text-foreground">{formatDate(req.desired_return_date)}</p>
-                              </div>
-                            </div>
-                          </div>
+                          )}
                         </div>
-
-                        {/* Actions */}
-                        {req.status === 'pending' && (
-                          <div className="grid grid-cols-2 gap-3 w-full pt-2 border-t border-border/30 mt-2">
-                            <Button
-                              onClick={() => handleOpenApprovalModal('approve', req.id)}
-                              variant="primary"
-                              size="lg"
-                              className="w-full text-base py-3"
-                            >
-                              <CheckCircle className="h-5 w-5 mr-2" />
-                              Aprobar
-                            </Button>
-                            <Button
-                              onClick={() => handleOpenApprovalModal('reject', req.id)}
-                              variant="destructive"
-                              size="lg"
-                              className="w-full text-base py-3"
-                            >
-                              <XCircle className="h-5 w-5 mr-2" />
-                              Rechazar
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             )}
           </>

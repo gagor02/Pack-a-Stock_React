@@ -7,99 +7,27 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import {
   LayoutDashboard,
-  Package,
-  Tags,
-  MapPin,
-  ArrowLeftRight,
-  FileText,
-  Users,
-  BarChart3,
-  Settings,
-  QrCode,
+  Building2,
   CreditCard,
+  Users,
   ChevronLeft,
   Moon,
   Sun,
   LogOut,
+  Shield,
 } from 'lucide-react'
 
 const navigation = [
-  {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-    roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Materiales',
-    href: '/materials',
-    icon: Package,
-    roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Categorías',
-    href: '/categories',
-    icon: Tags,
-    roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Ubicaciones',
-    href: '/locations',
-    icon: MapPin,
-    roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Etiquetas',
-    href: '/labels',
-    icon: QrCode,
-    roles: ['inventarista'],
-  },
-  {
-    name: 'Préstamos',
-    href: '/loans',
-    icon: ArrowLeftRight,
-    roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Solicitudes',
-    href: '/requests',
-    icon: FileText,
-    roles: ['inventarista'],
-  },
-  {
-    name: 'Usuarios',
-    href: '/users',
-    icon: Users,
-    roles: ['inventarista'],
-  },
-  {
-    name: 'Reportes',
-    href: '/reports',
-    icon: BarChart3,
-    roles: ['inventarista'],
-  },
-  {
-    name: 'Suscripcion',
-    href: '/subscription',
-    icon: CreditCard,
-    roles: ['inventarista'],
-  },
-  {
-    name: 'Configuracion',
-    href: '/settings',
-    icon: Settings,
-    roles: ['inventarista', 'employee'],
-  },
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { name: 'Cuentas', href: '/admin/accounts', icon: Building2 },
+  { name: 'Pagos', href: '/admin/payments', icon: CreditCard },
+  { name: 'Usuarios', href: '/admin/users', icon: Users },
 ]
 
-export default function Sidebar() {
+export default function AdminSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar, theme, toggleTheme } = useUIStore()
-
-  const filteredNav = navigation.filter((item) =>
-    user ? item.roles.includes(user.user_type) : false
-  )
 
   const handleLogout = () => {
     logout()
@@ -118,9 +46,10 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-border">
         {!sidebarCollapsed && (
-          <span className="text-xl font-bold text-foreground">
-            Pack-a-Stock
-          </span>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-blue-400" />
+            <span className="text-xl font-bold text-foreground">Admin</span>
+          </div>
         )}
         <button
           onClick={toggleSidebar}
@@ -138,9 +67,10 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
-        {filteredNav.map((item) => {
+        {navigation.map((item) => {
           const isActive =
-            pathname === item.href || pathname.startsWith(`${item.href}/`)
+            (item.href === '/admin' && pathname === '/admin') ||
+            (item.href !== '/admin' && pathname.startsWith(item.href))
           return (
             <Link
               key={item.name}
@@ -148,7 +78,7 @@ export default function Sidebar() {
               className={clsx(
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-blue-600 text-white'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
               title={sidebarCollapsed ? item.name : undefined}
@@ -162,7 +92,6 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border p-4 space-y-2">
-        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           className={clsx(
@@ -171,25 +100,15 @@ export default function Sidebar() {
           )}
           title={theme === 'light' ? 'Modo oscuro' : 'Modo claro'}
         >
-          {theme === 'light' ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
+          {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
           {!sidebarCollapsed && (
             <span>{theme === 'light' ? 'Modo oscuro' : 'Modo claro'}</span>
           )}
         </button>
 
-        {/* User info */}
         {user && (
-          <div
-            className={clsx(
-              'flex items-center gap-3 rounded-lg p-2',
-              sidebarCollapsed && 'justify-center'
-            )}
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold flex-shrink-0">
+          <div className={clsx('flex items-center gap-3 rounded-lg p-2', sidebarCollapsed && 'justify-center')}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold flex-shrink-0">
               {user.email[0].toUpperCase()}
             </div>
             {!sidebarCollapsed && (
@@ -197,25 +116,22 @@ export default function Sidebar() {
                 <p className="text-sm font-medium text-foreground truncate">
                   {user.full_name || user.email}
                 </p>
-                <p className="text-xs text-muted-foreground capitalize">
-                  {user.user_type}
-                </p>
+                <p className="text-xs text-blue-400 font-medium">Superadmin</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Logout */}
         <button
           onClick={handleLogout}
           className={clsx(
             'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-destructive hover:bg-destructive/10',
             sidebarCollapsed && 'justify-center'
           )}
-          title="Cerrar sesión"
+          title="Cerrar sesion"
         >
           <LogOut className="h-5 w-5" />
-          {!sidebarCollapsed && <span>Cerrar sesión</span>}
+          {!sidebarCollapsed && <span>Cerrar sesion</span>}
         </button>
       </div>
     </aside>
