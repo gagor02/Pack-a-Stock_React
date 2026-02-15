@@ -12,6 +12,7 @@ interface BaseInputProps {
   as?: 'input' | 'select' | 'textarea'
   children?: ReactNode
   rows?: number
+  type?: string
 }
 
 type InputProps = BaseInputProps &

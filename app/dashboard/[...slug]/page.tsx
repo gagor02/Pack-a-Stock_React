@@ -9,8 +9,8 @@ const MAP: Record<string, string> = {
   ubicacion: '/locations',
   prestamos: '/loans',
   prestamo: '/loans',
-  solicitudes: '/requests',
-  solicitud: '/requests',
+  solicitudes: '/loans',
+  solicitud: '/loans',
   usuarios: '/users',
   usuario: '/users',
   reportes: '/reports',
@@ -21,11 +21,12 @@ const MAP: Record<string, string> = {
   settings: '/settings',
 }
 
-export default function DashboardLegacyRedirect({
+export default async function DashboardLegacyRedirect({
   params,
 }: {
-  params: { slug?: string[] }
+  params: Promise<{ slug?: string[] }>
 }) {
-  const key = params.slug?.[0]?.toLowerCase() || ''
+  const { slug } = await params
+  const key = slug?.[0]?.toLowerCase() || ''
   redirect(MAP[key] || '/dashboard')
 }

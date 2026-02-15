@@ -477,7 +477,7 @@ export default function UsersPage() {
                               {isAdmin ? 'Admin' : 'Empleado'}
                             </Badge>
                             {!user.is_active && (
-                              <Badge variant="destructive" className="text-sm px-3 py-1">
+                              <Badge variant="danger" className="text-sm px-3 py-1">
                                 Inactivo
                               </Badge>
                             )}

@@ -249,7 +249,7 @@ export default function DashboardPage() {
       title: 'Prestamos Vencidos', desc: `${stats.loans.overdue} prestamos retrasados`,
     },
     stats.requests.pending > 0 && {
-      href: '/requests', icon: Bell, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30',
+      href: '/loans', icon: Bell, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30',
       title: 'Solicitudes Pendientes', desc: `${stats.requests.pending} por revisar`,
     },
   ].filter(Boolean) as any[]
@@ -261,7 +261,7 @@ export default function DashboardPage() {
     { href: '/locations', icon: MapPin, label: 'Ubicaciones', value: stats.locations, color: 'text-green-400', bg: 'from-green-500/15 to-green-500/5', border: 'border-green-500/20' },
     { href: '/loans', icon: ArrowLeftRight, label: 'Prestamos', value: stats.loans.active, color: 'text-emerald-400', bg: 'from-emerald-500/15 to-emerald-500/5', border: 'border-emerald-500/20' },
     { href: '/users', icon: Users, label: 'Usuarios', value: stats.users.total, color: 'text-violet-400', bg: 'from-violet-500/15 to-violet-500/5', border: 'border-violet-500/20' },
-    { href: '/requests', icon: FileText, label: 'Solicitudes', value: stats.requests.pending, color: 'text-amber-400', bg: 'from-amber-500/15 to-amber-500/5', border: 'border-amber-500/20' },
+    { href: '/loans', icon: FileText, label: 'Solicitudes', value: stats.requests.pending, color: 'text-amber-400', bg: 'from-amber-500/15 to-amber-500/5', border: 'border-amber-500/20' },
     { href: '/labels', icon: QrCode, label: 'Etiquetas QR', color: 'text-cyan-400', bg: 'from-cyan-500/15 to-cyan-500/5', border: 'border-cyan-500/20' },
     { href: '/settings', icon: Settings, label: 'Configuracion', color: 'text-gray-400', bg: 'from-gray-500/15 to-gray-500/5', border: 'border-gray-500/20' },
   ]
@@ -507,7 +507,7 @@ export default function DashboardPage() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={(props: any) => `${props.name} ${((props.percent ?? 0) * 100).toFixed(0)}%`}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
@@ -647,7 +647,7 @@ export default function DashboardPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {quickLinks.map(({ href, icon: Icon, label, value, color, bg, border }) => (
-              <Link key={href} href={href}>
+              <Link key={label} href={href}>
                 <div className={`p-5 rounded-xl border-2 ${border} bg-gradient-to-br ${bg} hover:shadow-xl hover:scale-[1.02] transition-all duration-200 cursor-pointer group`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className={`p-2.5 rounded-lg bg-white/5`}>

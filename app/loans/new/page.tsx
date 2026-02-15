@@ -185,6 +185,11 @@ export default function NewLoanPage() {
         return
       }
 
+      if (material.available_quantity <= 0) {
+        toast.error(`'${material.name}' no tiene unidades disponibles`)
+        return
+      }
+
       setSelectedMaterials(prev => [...prev, { ...material, quantity: 1 }])
       toast.success(`Material agregado: ${material.name}`)
     } catch (error: any) {
@@ -196,6 +201,10 @@ export default function NewLoanPage() {
     const existing = selectedMaterials.find(m => m.id === material.id)
     if (existing) {
       toast.error('Este material ya fue agregado')
+      return
+    }
+    if (material.available_quantity <= 0) {
+      toast.error(`'${material.name}' no tiene unidades disponibles`)
       return
     }
     setSelectedMaterials(prev => [...prev, { ...material, quantity: 1 }])
@@ -238,6 +247,11 @@ export default function NewLoanPage() {
 
     if (!returnDate) {
       toast.error('Selecciona una fecha de devolución')
+      return
+    }
+
+    if (new Date(returnDate) < new Date(today)) {
+      toast.error('La fecha de devolución no puede ser anterior a hoy')
       return
     }
 
@@ -332,7 +346,7 @@ export default function NewLoanPage() {
                       type="text"
                       placeholder="Buscar usuario..."
                       value={userSearchQuery}
-                      onChange={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setUserSearchQuery(e.target.value)
                         setShowUserDropdown(true)
                       }}
@@ -431,7 +445,7 @@ export default function NewLoanPage() {
                     type="text"
                     placeholder="Buscar material..."
                     value={materialSearchQuery}
-                    onChange={(e) => {
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setMaterialSearchQuery(e.target.value)
                       setShowMaterialDropdown(true)
                     }}
@@ -446,15 +460,20 @@ export default function NewLoanPage() {
                       <button
                         key={m.id}
                         onClick={() => addMaterialManually(m)}
-                        className="w-full px-4 py-3 text-left hover:bg-purple-900/20 transition-colors border-b border-gray-700 last:border-0"
+                        disabled={m.available_quantity <= 0}
+                        className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-700 last:border-0 ${
+                          m.available_quantity <= 0
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:bg-purple-900/20'
+                        }`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-white font-medium">{m.name}</p>
+                            <p className={`font-medium ${m.available_quantity <= 0 ? 'text-gray-500' : 'text-white'}`}>{m.name}</p>
                             <p className="text-sm text-gray-400">SKU: {m.sku}</p>
                           </div>
                           <Badge variant={m.available_quantity > 0 ? 'success' : 'danger'}>
-                            {m.available_quantity} disponibles
+                            {m.available_quantity > 0 ? `${m.available_quantity} disponibles` : 'Sin stock'}
                           </Badge>
                         </div>
                       </button>
@@ -552,7 +571,7 @@ export default function NewLoanPage() {
                   <Input
                     type="date"
                     value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReturnDate(e.target.value)}
                     min={today}
                   />
                 </div>

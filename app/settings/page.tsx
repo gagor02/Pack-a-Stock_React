@@ -321,15 +321,15 @@ export default function SettingsPage() {
                   {/* Limits */}
                   <div className="mt-4 pt-4 border-t border-border space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Usuarios máx.</span>
+                      <span className="text-muted-foreground">Usuarios max.</span>
                       <span className="font-medium text-foreground">
-                        {formData.max_users || '∞'}
+                        {formData.max_users === -1 ? '∞ Ilimitado' : formData.max_users ?? 5}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ubicaciones máx.</span>
+                      <span className="text-muted-foreground">Ubicaciones max.</span>
                       <span className="font-medium text-foreground">
-                        {formData.max_locations || '∞'}
+                        {formData.max_locations === -1 ? '∞ Ilimitado' : formData.max_locations ?? 1}
                       </span>
                     </div>
                   </div>
@@ -366,7 +366,9 @@ export default function SettingsPage() {
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground">Ubicación</p>
                     <p className="text-sm font-medium text-foreground">
-                      {formData.city}, {formData.state}
+                      {formData.city && formData.state
+                        ? `${formData.city}, ${formData.state}`
+                        : formData.city || formData.state || 'No especificada'}
                     </p>
                   </div>
                 </div>

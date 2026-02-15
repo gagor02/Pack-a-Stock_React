@@ -31,6 +31,7 @@ import {
   BarChart3,
   Tag,
   Layers,
+  ChevronDown,
 } from 'lucide-react'
 import jsQR from 'jsqr'
 
@@ -91,6 +92,7 @@ export default function MaterialsPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [showAllCategories, setShowAllCategories] = useState(false)
   const [filterLocation, setFilterLocation] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
@@ -443,6 +445,7 @@ export default function MaterialsPage() {
     switch (status) {
       case 'available': return 'border-emerald-500'
       case 'in_use': return 'border-amber-500'
+      case 'on_loan': return 'border-blue-500'
       case 'maintenance': return 'border-red-500'
       default: return 'border-border'
     }
@@ -452,6 +455,7 @@ export default function MaterialsPage() {
     switch (status) {
       case 'available': return 'Disponible'
       case 'in_use': return 'En uso'
+      case 'on_loan': return 'En préstamo'
       case 'maintenance': return 'Mantenimiento'
       default: return status
     }
@@ -504,7 +508,7 @@ export default function MaterialsPage() {
                   <Input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
                     required
                     placeholder="Ej: Laptop Dell XPS 15"
                     className="rounded-xl border-2 text-base"
@@ -518,7 +522,7 @@ export default function MaterialsPage() {
                   <Input
                     as="select"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, category: e.target.value })}
                     required
                     className="rounded-xl border-2 text-base"
                   >
@@ -538,7 +542,7 @@ export default function MaterialsPage() {
                   <Input
                     as="select"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, location: e.target.value })}
                     required
                     className="rounded-xl border-2 text-base"
                   >
@@ -558,7 +562,7 @@ export default function MaterialsPage() {
                   <Input
                     type="text"
                     value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, sku: e.target.value })}
                     placeholder="Se genera automáticamente"
                     className="rounded-xl border-2 text-base"
                   />
@@ -573,7 +577,7 @@ export default function MaterialsPage() {
                     <Input
                       type="text"
                       value={formData.serial_number}
-                      onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                      onChange={(e: any) => setFormData({ ...formData, serial_number: e.target.value })}
                       placeholder="Ej: SN-12345-ABC"
                       className="rounded-xl border-2 text-base"
                     />
@@ -588,7 +592,7 @@ export default function MaterialsPage() {
                     type="number"
                     min="1"
                     value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+                    onChange={(e: any) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
                     required
                     className="rounded-xl border-2 text-base"
                   />
@@ -602,7 +606,7 @@ export default function MaterialsPage() {
                     type="number"
                     min="0"
                     value={formData.min_stock_level}
-                    onChange={(e) => setFormData({ ...formData, min_stock_level: parseInt(e.target.value) })}
+                    onChange={(e: any) => setFormData({ ...formData, min_stock_level: parseInt(e.target.value) })}
                     required
                     className="rounded-xl border-2 text-base"
                   />
@@ -615,7 +619,7 @@ export default function MaterialsPage() {
                   <Input
                     as="select"
                     value={formData.unit_of_measure}
-                    onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, unit_of_measure: e.target.value })}
                     required
                     className="rounded-xl border-2 text-base"
                   >
@@ -636,7 +640,7 @@ export default function MaterialsPage() {
                   <Input
                     as="select"
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    onChange={(e: any) => setFormData({ ...formData, status: e.target.value })}
                     required
                     className="rounded-xl border-2 text-base"
                   >
@@ -654,7 +658,7 @@ export default function MaterialsPage() {
                 <Input
                   as="textarea"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e: any) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
                   placeholder="Descripción detallada del material..."
                   className="rounded-xl border-2 text-base"
@@ -749,49 +753,118 @@ export default function MaterialsPage() {
                 type="text"
                 placeholder="Buscar por nombre, SKU o número de serie..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e: any) => setSearchTerm(e.target.value)}
                 className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
             </div>
 
-            {/* Category Filter Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <button
-                onClick={() => setFilterCategory('all')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                  filterCategory === 'all'
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                Todos
-                <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                  filterCategory === 'all' ? 'bg-primary-foreground/20' : 'bg-secondary/50'
-                }`}>
-                  {materials.length}
-                </span>
-              </button>
-              {Object.entries(categoryCounts).map(([catName, count]) => (
-                <button
-                  key={catName}
-                  onClick={() => setFilterCategory(catName)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                    filterCategory === catName
-                      ? 'bg-primary text-primary-foreground shadow-lg'
-                      : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
-                  }`}
-                >
-                  <Tag className="h-4 w-4" />
-                  {catName}
-                  <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                    filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
-                  }`}>
-                    {count}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {/* Category Filter */}
+            {(() => {
+              const categoryEntries = Object.entries(categoryCounts)
+              const MAX_VISIBLE = 4
+              const hasOverflow = categoryEntries.length > MAX_VISIBLE
+              const visibleCategories = hasOverflow ? categoryEntries.slice(0, MAX_VISIBLE) : categoryEntries
+              const hiddenCategories = hasOverflow ? categoryEntries.slice(MAX_VISIBLE) : []
+              const selectedHiddenCat = hiddenCategories.find(([name]) => name === filterCategory)
+
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setFilterCategory('all')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                      filterCategory === 'all'
+                        ? 'bg-primary text-primary-foreground shadow-lg'
+                        : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                    }`}
+                  >
+                    <Layers className="h-4 w-4" />
+                    Todos
+                    <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                      filterCategory === 'all' ? 'bg-primary-foreground/20' : 'bg-secondary/50'
+                    }`}>
+                      {materials.length}
+                    </span>
+                  </button>
+                  {visibleCategories.map(([catName, count]) => (
+                    <button
+                      key={catName}
+                      onClick={() => setFilterCategory(catName)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                        filterCategory === catName
+                          ? 'bg-primary text-primary-foreground shadow-lg'
+                          : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                      }`}
+                    >
+                      <Tag className="h-4 w-4" />
+                      {catName}
+                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                        filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
+                      }`}>
+                        {count as number}
+                      </span>
+                    </button>
+                  ))}
+                  {hasOverflow && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowAllCategories(!showAllCategories)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                          selectedHiddenCat
+                            ? 'bg-primary text-primary-foreground shadow-lg'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
+                        }`}
+                      >
+                        {selectedHiddenCat ? (
+                          <>
+                            <Tag className="h-4 w-4" />
+                            {selectedHiddenCat[0]}
+                            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold bg-primary-foreground/20`}>
+                              {selectedHiddenCat[1] as number}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            +{hiddenCategories.length} más
+                          </>
+                        )}
+                        <ChevronDown className={`h-4 w-4 transition-transform ${showAllCategories ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showAllCategories && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setShowAllCategories(false)} />
+                          <div className="absolute top-full left-0 mt-2 z-50 bg-card border-2 border-border rounded-xl shadow-2xl p-2 min-w-[220px] max-h-[300px] overflow-y-auto">
+                            {hiddenCategories.map(([catName, count]) => (
+                              <button
+                                key={catName}
+                                onClick={() => {
+                                  setFilterCategory(catName)
+                                  setShowAllCategories(false)
+                                }}
+                                className={`flex items-center justify-between gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                  filterCategory === catName
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-foreground hover:bg-secondary/50'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Tag className="h-4 w-4" />
+                                  {catName}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                                  filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
+                                }`}>
+                                  {count as number}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Materials Grid */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -832,6 +905,8 @@ export default function MaterialsPage() {
                           variant={
                             material.status === 'available'
                               ? 'success'
+                              : material.status === 'on_loan'
+                              ? 'info'
                               : material.status === 'in_use'
                               ? 'warning'
                               : 'default'
@@ -842,8 +917,8 @@ export default function MaterialsPage() {
                         </Badge>
                       </div>
 
-                      {/* Stock Badge - Bottom Right */}
-                      {material.is_low_stock && (
+                      {/* Stock Badge - Bottom Right (solo consumibles) */}
+                      {material.is_low_stock && (material.category?.is_consumable || material.is_consumable) && (
                         <div className="absolute bottom-2 right-2">
                           <Badge variant="default" className="bg-destructive/90 backdrop-blur-sm shadow-lg text-xs">
                             Stock Bajo
@@ -902,7 +977,7 @@ export default function MaterialsPage() {
                       <div className="grid grid-cols-4 gap-1.5 pt-1">
                         <Button
                           onClick={() => setViewingMaterial(material)}
-                          variant="default"
+                          variant="secondary"
                           size="sm"
                           className="w-full"
                           title="Ver detalle"
@@ -929,7 +1004,7 @@ export default function MaterialsPage() {
                         </Button>
                         <Button
                           onClick={() => handleDelete(material.id)}
-                          variant="danger"
+                          variant="destructive"
                           size="sm"
                           className="w-full"
                           title="Eliminar"
@@ -1406,7 +1481,7 @@ export default function MaterialsPage() {
                     type="number"
                     min="1"
                     value={addStockQuantity}
-                    onChange={(e) => setAddStockQuantity(parseInt(e.target.value) || 1)}
+                    onChange={(e: any) => setAddStockQuantity(parseInt(e.target.value) || 1)}
                     className="rounded-xl border-2 text-base"
                   />
                 </div>

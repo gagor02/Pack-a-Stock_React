@@ -424,7 +424,7 @@ export default function RequestsPage() {
                   onClick={handleAction}
                   disabled={approveMutation.isPending || rejectMutation.isPending}
                   className={`flex-1 text-base py-3 ${actionModal.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                  variant={actionModal.type === 'reject' ? 'destructive' : 'default'}
+                  variant={actionModal.type === 'reject' ? 'destructive' : 'primary'}
                   size="lg"
                 >
                   {approveMutation.isPending || rejectMutation.isPending

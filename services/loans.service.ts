@@ -189,7 +189,11 @@ export const loansService = {
       signature?: string
     }
   ) => {
-    const { data } = await api.post(`/loans/loans/${id}/return_loan/`, returnData)
+    const { data } = await api.post(`/loans/loans/${id}/return_loan/`, {
+      condition_on_return: returnData.condition,
+      damage_notes: returnData.damage_notes || '',
+      return_signature: returnData.signature || '',
+    })
     return data
   },
 
