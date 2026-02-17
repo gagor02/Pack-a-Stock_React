@@ -11,7 +11,7 @@ import {
   Tags,
   MapPin,
   ArrowLeftRight,
-  FileText,
+  Inbox,
   Users,
   BarChart3,
   Settings,
@@ -55,16 +55,16 @@ const navigation = [
     roles: ['inventarista'],
   },
   {
+    name: 'Solicitudes',
+    href: '/requests',
+    icon: Inbox,
+    roles: ['inventarista'],
+  },
+  {
     name: 'Préstamos',
     href: '/loans',
     icon: ArrowLeftRight,
     roles: ['inventarista', 'employee'],
-  },
-  {
-    name: 'Solicitudes',
-    href: '/requests',
-    icon: FileText,
-    roles: ['inventarista'],
   },
   {
     name: 'Usuarios',

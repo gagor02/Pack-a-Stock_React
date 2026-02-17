@@ -23,6 +23,9 @@ import {
   Mail,
   UserCheck,
   UserX,
+  X,
+  Package,
+  Clock,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -49,6 +52,8 @@ export default function UsersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string; activeLoans: number; pendingRequests: number; loanMaterials: string[] } | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [formData, setFormData] = useState<UserFormData>({
     email: '',
     full_name: '',
@@ -194,9 +199,28 @@ export default function UsersPage() {
     setShowForm(true)
   }
 
-  const handleDelete = (id: number) => {
-    if (confirm('¿Eliminar este usuario?')) {
-      deleteMutation.mutate(id)
+  const handleDelete = async (user: UserItem) => {
+    setDeleteLoading(true)
+    try {
+      const response = await api.get(`/auth/users/${user.id}/check_delete/`)
+      setDeleteConfirm({
+        id: user.id,
+        name: user.full_name || user.email,
+        activeLoans: response.data.active_loans_count,
+        pendingRequests: response.data.pending_requests_count,
+        loanMaterials: response.data.loan_material_names,
+      })
+    } catch {
+      setDeleteConfirm({ id: user.id, name: user.full_name || user.email, activeLoans: 0, pendingRequests: 0, loanMaterials: [] })
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirm) {
+      deleteMutation.mutate(deleteConfirm.id)
+      setDeleteConfirm(null)
     }
   }
 
@@ -527,7 +551,8 @@ export default function UsersPage() {
                             Editar
                           </Button>
                           <Button
-                            onClick={() => handleDelete(user.id)}
+                            onClick={() => handleDelete(user)}
+                            disabled={deleteLoading}
                             variant="destructive"
                             size="lg"
                             className="w-full text-base py-3"
@@ -542,6 +567,82 @@ export default function UsersPage() {
                 </Card>
               )
             })}
+          </div>
+        )}
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md border-2 shadow-2xl">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-xl flex items-center gap-3">
+                    <div className="p-2 bg-red-500/10 rounded-xl">
+                      <AlertTriangle className="h-6 w-6 text-red-400" />
+                    </div>
+                    Eliminar Usuario
+                  </CardTitle>
+                  <button onClick={() => setDeleteConfirm(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-base text-foreground">
+                  ¿Estás seguro de eliminar a <strong>{deleteConfirm.name}</strong>?
+                </p>
+
+                {(deleteConfirm.activeLoans > 0 || deleteConfirm.pendingRequests > 0) && (
+                  <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl space-y-3">
+                    {deleteConfirm.activeLoans > 0 && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Package className="h-5 w-5 text-amber-400" />
+                          <p className="text-sm font-medium text-amber-300">
+                            {deleteConfirm.activeLoans} préstamo(s) activo(s)
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          {deleteConfirm.loanMaterials.map((name, i) => (
+                            <p key={i} className="text-sm text-foreground/80 pl-7">• {name}</p>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {deleteConfirm.pendingRequests > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-amber-400" />
+                        <p className="text-sm font-medium text-amber-300">
+                          {deleteConfirm.pendingRequests} solicitud(es) pendiente(s)
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-xs text-amber-400/80 pl-7">
+                      Los préstamos y solicitudes de este usuario se mantendrán en el historial.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <Button
+                    onClick={() => setDeleteConfirm(null)}
+                    variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={confirmDelete}
+                    variant="destructive"
+                    size="lg"
+                    className="text-base py-3"
+                  >
+                    <Trash2 className="h-5 w-5 mr-2" />
+                    Eliminar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

@@ -22,6 +22,8 @@ import {
   Globe,
   Navigation,
   Hash,
+  X,
+  Package,
 } from 'lucide-react'
 
 interface LocationFormData {
@@ -42,6 +44,8 @@ export default function LocationsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string; materialsCount: number; materialNames: string[] } | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [formData, setFormData] = useState<LocationFormData>({
     name: '',
     street: '',
@@ -197,9 +201,28 @@ export default function LocationsPage() {
     setShowForm(true)
   }
 
-  const handleDelete = (id: number) => {
-    if (confirm('¿Estas seguro de eliminar esta ubicacion?')) {
-      deleteMutation.mutate(id)
+  const handleDelete = async (location: any) => {
+    setDeleteLoading(true)
+    try {
+      const response = await api.get(`/materials/locations/${location.id}/check_delete/`)
+      setDeleteConfirm({
+        id: location.id,
+        name: location.name,
+        materialsCount: response.data.materials_count,
+        materialNames: response.data.material_names,
+      })
+    } catch {
+      // Si falla el check, mostrar confirmación simple
+      setDeleteConfirm({ id: location.id, name: location.name, materialsCount: 0, materialNames: [] })
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirm) {
+      deleteMutation.mutate(deleteConfirm.id)
+      setDeleteConfirm(null)
     }
   }
 
@@ -548,7 +571,8 @@ export default function LocationsPage() {
                         Editar
                       </Button>
                       <Button
-                        onClick={() => handleDelete(location.id)}
+                        onClick={() => handleDelete(location)}
+                        disabled={deleteLoading}
                         variant="destructive"
                         size="lg"
                         className="w-full text-base py-3"
@@ -561,6 +585,73 @@ export default function LocationsPage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md border-2 shadow-2xl">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-xl flex items-center gap-3">
+                    <div className="p-2 bg-red-500/10 rounded-xl">
+                      <AlertTriangle className="h-6 w-6 text-red-400" />
+                    </div>
+                    Eliminar Ubicación
+                  </CardTitle>
+                  <button onClick={() => setDeleteConfirm(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-base text-foreground">
+                  ¿Estás seguro de eliminar <strong>{deleteConfirm.name}</strong>?
+                </p>
+
+                {deleteConfirm.materialsCount > 0 && (
+                  <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-5 w-5 text-amber-400" />
+                      <p className="text-sm font-medium text-amber-300">
+                        {deleteConfirm.materialsCount} material(es) pertenecen a esta ubicación
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      {deleteConfirm.materialNames.map((name, i) => (
+                        <p key={i} className="text-sm text-foreground/80 pl-7">• {name}</p>
+                      ))}
+                      {deleteConfirm.materialsCount > 10 && (
+                        <p className="text-sm text-muted-foreground pl-7">y {deleteConfirm.materialsCount - 10} más...</p>
+                      )}
+                    </div>
+                    <p className="text-xs text-amber-400/80 pl-7">
+                      Estos materiales quedarán sin ubicación asignada.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <Button
+                    onClick={() => setDeleteConfirm(null)}
+                    variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={confirmDelete}
+                    variant="destructive"
+                    size="lg"
+                    className="text-base py-3"
+                  >
+                    <Trash2 className="h-5 w-5 mr-2" />
+                    Eliminar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

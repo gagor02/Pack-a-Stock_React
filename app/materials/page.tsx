@@ -234,7 +234,23 @@ export default function MaterialsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: MaterialFormData }) => {
-      const response = await api.put(`/materials/materials/${id}/`, data)
+      const formDataToSend = new FormData()
+
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          formDataToSend.append(key, value.toString())
+        }
+      })
+
+      if (selectedImage) {
+        formDataToSend.append('image', selectedImage)
+      }
+
+      const response = await api.put(`/materials/materials/${id}/`, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
       return response.data
     },
     onSuccess: () => {

@@ -9,7 +9,7 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui'
 import {
-  Package, User, Mail, Lock, Building2, Phone, MapPin,
+  Package, User, Mail, Lock, Building2, Phone,
   ArrowRight, ArrowLeft, CheckCircle, Boxes, BarChart3, Shield,
 } from 'lucide-react'
 
@@ -19,17 +19,9 @@ interface RegisterData {
   full_name: string
   company_name: string
   phone: string
-  street: string
-  exterior_number: string
-  interior_number: string
-  neighborhood: string
-  postal_code: string
-  city: string
-  state: string
-  country: string
 }
 
-type Step = 1 | 2 | 3
+type Step = 1 | 2
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -41,15 +33,8 @@ export default function RegisterPage() {
     full_name: '',
     company_name: '',
     phone: '',
-    street: '',
-    exterior_number: '',
-    interior_number: '',
-    neighborhood: '',
-    postal_code: '',
-    city: '',
-    state: '',
-    country: 'Mexico',
   })
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterData) => {
@@ -61,17 +46,18 @@ export default function RegisterPage() {
         toast.success('Cuenta creada exitosamente')
         localStorage.setItem('access_token', data.data.tokens.access)
         localStorage.setItem('refresh_token', data.data.tokens.refresh)
+        localStorage.setItem('new_account', 'true')
         setAuth(data.data.user, data.data.tokens.access, data.data.tokens.refresh)
-        router.push('/dashboard')
+        router.push('/settings')
       }
     },
     onError: (error: any) => {
-      const errors = error.response?.data?.errors
-      if (errors) {
-        if (errors.email && Array.isArray(errors.email)) {
-          toast.error(errors.email[0])
+      const errs = error.response?.data?.errors
+      if (errs) {
+        if (errs.email && Array.isArray(errs.email)) {
+          toast.error(errs.email[0])
         } else {
-          Object.entries(errors).forEach(([field, messages]: [string, any]) => {
+          Object.entries(errs).forEach(([, messages]: [string, any]) => {
             if (Array.isArray(messages)) {
               messages.forEach((msg) => toast.error(msg))
             }
@@ -86,42 +72,92 @@ export default function RegisterPage() {
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    setFormData({ ...formData, [name]: value })
+    // Clear error on change
+    if (errors[name]) {
+      setErrors({ ...errors, [name]: '' })
+    }
+  }
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only allow digits
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setFormData({ ...formData, phone: digits })
+    if (errors.phone) {
+      setErrors({ ...errors, phone: '' })
+    }
+  }
+
+  const validateStep1 = (): boolean => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.full_name.trim()) {
+      newErrors.full_name = 'El nombre es requerido'
+    } else if (formData.full_name.trim().length < 3) {
+      newErrors.full_name = 'El nombre debe tener al menos 3 caracteres'
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'El email es requerido'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Ingresa un email válido'
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'La contraseña es requerida'
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Mínimo 8 caracteres'
+    }
+
+    setErrors(newErrors)
+    if (Object.keys(newErrors).length > 0) {
+      toast.error(Object.values(newErrors)[0])
+      return false
+    }
+    return true
+  }
+
+  const validateStep2 = (): boolean => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.company_name.trim()) {
+      newErrors.company_name = 'El nombre de la empresa es requerido'
+    }
+
+    if (formData.phone && formData.phone.length !== 10) {
+      newErrors.phone = 'El teléfono debe tener 10 dígitos'
+    }
+
+    setErrors(newErrors)
+    if (Object.keys(newErrors).length > 0) {
+      toast.error(Object.values(newErrors)[0])
+      return false
+    }
+    return true
   }
 
   const handleNext = () => {
-    if (step === 1) {
-      if (!formData.full_name || !formData.email || !formData.password) {
-        toast.error('Completa todos los campos requeridos')
-        return
-      }
-      if (formData.password.length < 8) {
-        toast.error('La contrasena debe tener al menos 8 caracteres')
-        return
-      }
+    if (step === 1 && validateStep1()) {
       setStep(2)
-    } else if (step === 2) {
-      if (!formData.company_name) {
-        toast.error('El nombre de la empresa es requerido')
-        return
-      }
-      setStep(3)
     }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    registerMutation.mutate(formData)
+    if (validateStep2()) {
+      registerMutation.mutate(formData)
+    }
   }
 
   const inputClass = "w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
   const inputWithIconClass = `${inputClass} pl-12`
+  const inputErrorClass = "border-red-500 focus:ring-red-500 focus:border-red-500"
   const labelClass = "block text-sm font-medium text-foreground mb-2 uppercase tracking-wider"
 
   const steps = [
     { number: 1, label: 'Personal' },
     { number: 2, label: 'Empresa' },
-    { number: 3, label: 'Direccion' },
   ]
 
   return (
@@ -157,7 +193,7 @@ export default function RegisterPage() {
                 }`}>
                   {step > s.number ? <CheckCircle className="h-4 w-4" /> : s.number}
                 </div>
-                <span className={`text-sm font-medium hidden sm:block ${
+                <span className={`text-sm font-medium ${
                   step >= s.number ? 'text-foreground' : 'text-muted-foreground'
                 }`}>
                   {s.label}
@@ -186,11 +222,11 @@ export default function RegisterPage() {
                       type="text"
                       value={formData.full_name}
                       onChange={handleChange}
-                      required
                       placeholder="Juan Perez"
-                      className={inputWithIconClass}
+                      className={`${inputWithIconClass} ${errors.full_name ? inputErrorClass : ''}`}
                     />
                   </div>
+                  {errors.full_name && <p className="text-sm text-red-400 mt-1">{errors.full_name}</p>}
                 </div>
                 <div>
                   <label htmlFor="email" className={labelClass}>Email *</label>
@@ -202,14 +238,14 @@ export default function RegisterPage() {
                       type="email"
                       value={formData.email}
                       onChange={handleChange}
-                      required
                       placeholder="tu@empresa.com"
-                      className={inputWithIconClass}
+                      className={`${inputWithIconClass} ${errors.email ? inputErrorClass : ''}`}
                     />
                   </div>
+                  {errors.email && <p className="text-sm text-red-400 mt-1">{errors.email}</p>}
                 </div>
                 <div>
-                  <label htmlFor="password" className={labelClass}>Contrasena *</label>
+                  <label htmlFor="password" className={labelClass}>Contraseña *</label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <input
@@ -218,12 +254,11 @@ export default function RegisterPage() {
                       type="password"
                       value={formData.password}
                       onChange={handleChange}
-                      required
-                      minLength={8}
-                      placeholder="Minimo 8 caracteres"
-                      className={inputWithIconClass}
+                      placeholder="Mínimo 8 caracteres"
+                      className={`${inputWithIconClass} ${errors.password ? inputErrorClass : ''}`}
                     />
                   </div>
+                  {errors.password && <p className="text-sm text-red-400 mt-1">{errors.password}</p>}
                 </div>
               </div>
             )}
@@ -241,14 +276,14 @@ export default function RegisterPage() {
                       type="text"
                       value={formData.company_name}
                       onChange={handleChange}
-                      required
                       placeholder="Mi Empresa S.A."
-                      className={inputWithIconClass}
+                      className={`${inputWithIconClass} ${errors.company_name ? inputErrorClass : ''}`}
                     />
                   </div>
+                  {errors.company_name && <p className="text-sm text-red-400 mt-1">{errors.company_name}</p>}
                 </div>
                 <div>
-                  <label htmlFor="phone" className={labelClass}>Telefono</label>
+                  <label htmlFor="phone" className={labelClass}>Teléfono (10 dígitos)</label>
                   <div className="relative">
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <input
@@ -256,122 +291,17 @@ export default function RegisterPage() {
                       name="phone"
                       type="tel"
                       value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="+52 55 1234 5678"
-                      className={inputWithIconClass}
+                      onChange={handlePhoneChange}
+                      placeholder="5512345678"
+                      maxLength={10}
+                      className={`${inputWithIconClass} ${errors.phone ? inputErrorClass : ''}`}
                     />
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Address */}
-            {step === 3 && (
-              <div className="space-y-5">
-                <div>
-                  <label htmlFor="street" className={labelClass}>Calle</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <input
-                      id="street"
-                      name="street"
-                      type="text"
-                      value={formData.street}
-                      onChange={handleChange}
-                      placeholder="Av. Principal"
-                      className={inputWithIconClass}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="exterior_number" className={labelClass}>Num. Exterior</label>
-                    <input
-                      id="exterior_number"
-                      name="exterior_number"
-                      type="text"
-                      value={formData.exterior_number}
-                      onChange={handleChange}
-                      placeholder="123"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="interior_number" className={labelClass}>Num. Interior</label>
-                    <input
-                      id="interior_number"
-                      name="interior_number"
-                      type="text"
-                      value={formData.interior_number}
-                      onChange={handleChange}
-                      placeholder="A-101"
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="neighborhood" className={labelClass}>Colonia</label>
-                    <input
-                      id="neighborhood"
-                      name="neighborhood"
-                      type="text"
-                      value={formData.neighborhood}
-                      onChange={handleChange}
-                      placeholder="Centro"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="postal_code" className={labelClass}>Codigo Postal</label>
-                    <input
-                      id="postal_code"
-                      name="postal_code"
-                      type="text"
-                      value={formData.postal_code}
-                      onChange={handleChange}
-                      placeholder="12345"
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="city" className={labelClass}>Ciudad</label>
-                    <input
-                      id="city"
-                      name="city"
-                      type="text"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="CDMX"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="state" className={labelClass}>Estado</label>
-                    <input
-                      id="state"
-                      name="state"
-                      type="text"
-                      value={formData.state}
-                      onChange={handleChange}
-                      placeholder="CDMX"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="country" className={labelClass}>Pais</label>
-                    <input
-                      id="country"
-                      name="country"
-                      type="text"
-                      value={formData.country}
-                      onChange={handleChange}
-                      placeholder="Mexico"
-                      className={inputClass}
-                    />
-                  </div>
+                  {errors.phone ? (
+                    <p className="text-sm text-red-400 mt-1">{errors.phone}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">{formData.phone.length}/10 dígitos</p>
+                  )}
                 </div>
               </div>
             )}
@@ -387,10 +317,10 @@ export default function RegisterPage() {
                   className="text-base px-6"
                 >
                   <ArrowLeft className="h-5 w-5 mr-2" />
-                  Atras
+                  Atrás
                 </Button>
               )}
-              {step < 3 ? (
+              {step < 2 ? (
                 <Button
                   type="button"
                   onClick={handleNext}
@@ -431,7 +361,7 @@ export default function RegisterPage() {
                 href="/login"
                 className="text-primary hover:underline font-semibold"
               >
-                Inicia sesion
+                Inicia sesión
               </Link>
             </p>
           </div>
@@ -462,7 +392,7 @@ export default function RegisterPage() {
                 Empieza a<br />controlar tu<br />inventario hoy
               </h2>
               <p className="text-lg text-white/70 mt-4 max-w-sm">
-                Crea tu cuenta gratis y organiza materiales, prestamos y ubicaciones.
+                Crea tu cuenta gratis y organiza materiales, préstamos y ubicaciones.
               </p>
             </div>
 
@@ -472,7 +402,7 @@ export default function RegisterPage() {
                 <div className="p-2 bg-white/10 rounded-lg">
                   <Boxes className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-white/90 font-medium">Registro rapido y sin costo</span>
+                <span className="text-white/90 font-medium">Registro rápido y sin costo</span>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
                 <div className="p-2 bg-white/10 rounded-lg">

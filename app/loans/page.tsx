@@ -1,13 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
-
-const QRCodeSVG = dynamic(
-  () => import('qrcode.react').then((mod) => mod.QRCodeSVG),
-  { ssr: false, loading: () => <div className="w-[200px] h-[200px] bg-secondary/20 rounded-xl animate-pulse" /> }
-)
+import { QRCodeSVG } from 'qrcode.react'
 import { useAuthStore } from '@/store/authStore'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Button } from '@/components/ui'
@@ -17,8 +12,6 @@ import { Input } from '@/components/ui'
 import {
   useLoanRequests,
   useMyRequests,
-  useApproveLoanRequest,
-  useRejectLoanRequest,
   useLoans,
   useMyLoans,
   useReturnLoan,
@@ -32,29 +25,21 @@ import {
   CheckCircle,
   XCircle,
   Package,
-  User,
   ShieldBan,
   AlertTriangle,
   Plus,
   Clock,
   RotateCcw,
   Inbox,
-  ClipboardList,
   QrCode,
   ScanLine,
   Search,
+  History,
 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 
-type TabKey = 'pedidos' | 'devoluciones'
-
-interface ApprovalModalState {
-  isOpen: boolean
-  type: 'approve' | 'reject'
-  id: number
-  notes: string
-}
+type TabKey = 'activos' | 'devoluciones' | 'historial'
 
 interface ReturnModalState {
   isOpen: boolean
@@ -93,14 +78,8 @@ export default function LoansPage() {
   const { user } = useAuthStore()
   const isInventarista = user?.user_type === 'inventarista'
 
-  const [activeTab, setActiveTab] = useState<TabKey>('pedidos')
+  const [activeTab, setActiveTab] = useState<TabKey>('activos')
   const [searchTerm, setSearchTerm] = useState('')
-  const [approvalModal, setApprovalModal] = useState<ApprovalModalState>({
-    isOpen: false,
-    type: 'approve',
-    id: 0,
-    notes: '',
-  })
   const [returnModal, setReturnModal] = useState<ReturnModalState>({
     isOpen: false,
     loanId: null,
@@ -134,15 +113,13 @@ export default function LoansPage() {
   const scannerContainerRef = useRef<HTMLDivElement>(null)
 
   // Queries
-  const { data: myRequestsData, isLoading: loadingMyRequests } = useMyRequests()
-  const { data: allRequestsData, isLoading: loadingAllRequests } = useLoanRequests()
+  const { data: myRequestsData } = useMyRequests()
+  const { data: allRequestsData } = useLoanRequests()
   const { data: myLoansData, isLoading: loadingMyLoans } = useMyLoans()
   const { data: allLoansData, isLoading: loadingAllLoans } = useLoans()
   const { data: extensionsData } = useLoanExtensions()
 
   // Mutations
-  const approveMutation = useApproveLoanRequest()
-  const rejectMutation = useRejectLoanRequest()
   const returnMutation = useReturnLoan()
   const approveExtensionMutation = useApproveExtension()
   const rejectExtensionMutation = useRejectExtension()
@@ -154,24 +131,24 @@ export default function LoansPage() {
   const allLoans = Array.isArray(allLoansData) ? allLoansData : allLoansData?.results ?? []
   const extensions = Array.isArray(extensionsData) ? extensionsData : extensionsData?.results ?? []
 
-  // ---- TAB 1: PEDIDOS ----
-  // Combinar solicitudes pendientes (de empleados) + préstamos directos hechos por inventarista
-  const pendingRequests = isInventarista
-    ? allRequests.filter((r: any) => r.status === 'pending')
-    : myRequests.filter((r: any) => r.status === 'pending')
+  // Data
+  const loans = isInventarista ? allLoans : myLoans
+  const requests = isInventarista ? allRequests : myRequests
 
-  const approvedRequests = isInventarista
-    ? allRequests.filter((r: any) => r.status !== 'pending')
-    : myRequests.filter((r: any) => r.status !== 'pending')
+  // Tab 1: Activos — préstamos en circulación (activos + vencidos)
+  const activeLoans = loans.filter((l: any) => l.status === 'active' || l.status === 'overdue')
 
-  // Todos los préstamos directos (para inventarista) o mis préstamos (empleado)
-  const directLoans = isInventarista ? allLoans : myLoans
+  // Tab 2: Devoluciones — mismos activos pero enfocado en acción de devolver
+  // (usa activeLoans)
 
-  // ---- TAB 2: DEVOLUCIONES ----
-  // Solo préstamos activos/vencidos que necesitan devolución
-  const activeLoans = (isInventarista ? allLoans : myLoans).filter(
-    (l: any) => l.status === 'active' || l.status === 'overdue'
-  )
+  // Tab 3: Historial — solicitudes procesadas + préstamos devueltos/completados
+  const historyRequests = requests.filter((r: any) => r.status !== 'pending')
+  const historyLoans = loans.filter((l: any) => l.status === 'returned' || l.status === 'completed' || l.status === 'lost')
+
+  // Stats
+  const activeCount = activeLoans.filter((l: any) => l.status === 'active').length
+  const overdueCount = activeLoans.filter((l: any) => l.status === 'overdue').length
+  const returnedCount = historyLoans.length
 
   // Filtro de búsqueda
   const filterBySearch = (items: any[]) => {
@@ -185,42 +162,6 @@ export default function LoansPage() {
   }
 
   // Handlers
-  const handleOpenApprovalModal = (type: 'approve' | 'reject', id: number) => {
-    setApprovalModal({ isOpen: true, type, id, notes: '' })
-  }
-
-  const handleCloseApprovalModal = () => {
-    setApprovalModal({ isOpen: false, type: 'approve', id: 0, notes: '' })
-  }
-
-  const handleSubmitApproval = () => {
-    if (approvalModal.type === 'approve') {
-      approveMutation.mutate(
-        { id: approvalModal.id, notes: approvalModal.notes },
-        {
-          onSuccess: (data: any) => {
-            handleCloseApprovalModal()
-            // Mostrar QR al aprobar
-            const qrToken = data?.qr_token || data?.data?.qr_token
-            if (qrToken) {
-              setQrShowModal({
-                isOpen: true,
-                qrToken,
-                title: 'Pedido Aprobado',
-                subtitle: 'El empleado puede usar este QR para recoger sus materiales',
-              })
-            }
-          },
-        }
-      )
-    } else {
-      rejectMutation.mutate(
-        { id: approvalModal.id, reason: approvalModal.notes },
-        { onSuccess: () => handleCloseApprovalModal() }
-      )
-    }
-  }
-
   const handleOpenReturnModal = (loanId: number) => {
     setReturnModal({ isOpen: true, loanId, condition: 'good', notes: '' })
   }
@@ -330,7 +271,6 @@ export default function LoansPage() {
     setQrModal((prev) => ({ ...prev, scanning: true, error: null }))
     try {
       const { Html5Qrcode } = await import('html5-qrcode')
-      // Wait for container to be rendered
       await new Promise((r) => setTimeout(r, 300))
       if (!scannerContainerRef.current) return
       const scanner = new Html5Qrcode('qr-scanner-container')
@@ -396,11 +336,12 @@ export default function LoansPage() {
   }
 
   // Helper functions
-  const getStatusBadgeVariant = (status: string): 'default' | 'success' | 'warning' | 'danger' => {
+  const getStatusBadgeVariant = (status: string): 'default' | 'success' | 'warning' | 'danger' | 'info' => {
     switch (status) {
       case 'approved': case 'active': return 'success'
       case 'pending': return 'warning'
       case 'rejected': case 'overdue': case 'lost': return 'danger'
+      case 'returned': case 'completed': return 'info'
       default: return 'default'
     }
   }
@@ -440,11 +381,6 @@ export default function LoansPage() {
     })
   }
 
-  // Counts
-  const pendingCount = pendingRequests.length
-  const activeCount = activeLoans.length
-  const overdueCount = activeLoans.filter((l: any) => l.status === 'overdue').length
-
   // Loading spinner
   const Spinner = () => (
     <div className="flex flex-col items-center justify-center py-20">
@@ -466,7 +402,7 @@ export default function LoansPage() {
     </Card>
   )
 
-  const isLoading = loadingMyRequests || loadingAllRequests || loadingMyLoans || loadingAllLoans
+  const isLoading = loadingMyLoans || loadingAllLoans
 
   return (
     <DashboardLayout>
@@ -480,7 +416,7 @@ export default function LoansPage() {
             <div>
               <h1 className="text-3xl font-bold text-foreground tracking-tight">Prestamos</h1>
               <p className="text-base text-muted-foreground mt-1">
-                Gestiona pedidos y devoluciones
+                Gestiona prestamos activos, devoluciones e historial
               </p>
             </div>
           </div>
@@ -511,17 +447,6 @@ export default function LoansPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="p-5 rounded-xl border-2 border-border/50">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-yellow-500/10">
-                <Clock className="h-6 w-6 text-yellow-500" />
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-foreground">{pendingCount}</p>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Por aprobar</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5 rounded-xl border-2 border-border/50">
-            <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-green-500/10">
                 <Package className="h-6 w-6 text-green-500" />
               </div>
@@ -542,13 +467,25 @@ export default function LoansPage() {
               </div>
             </div>
           </Card>
+          <Card className="p-5 rounded-xl border-2 border-border/50">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10">
+                <RotateCcw className="h-6 w-6 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-foreground">{returnedCount}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devueltos</p>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Tabs - Solo 2 */}
+        {/* Tabs */}
         <div className="flex gap-2 p-1.5 bg-secondary/30 rounded-xl">
           {[
-            { key: 'pedidos' as TabKey, label: 'Pedidos', icon: ClipboardList, count: pendingCount },
-            { key: 'devoluciones' as TabKey, label: 'Devoluciones', icon: RotateCcw, count: activeCount },
+            { key: 'activos' as TabKey, label: 'Activos', icon: Package, count: activeLoans.length },
+            { key: 'devoluciones' as TabKey, label: 'Devoluciones', icon: RotateCcw, count: activeLoans.length },
+            { key: 'historial' as TabKey, label: 'Historial', icon: History, count: historyLoans.length + historyRequests.length },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.key
@@ -588,229 +525,11 @@ export default function LoansPage() {
           />
         </div>
 
-        {/* ====== TAB PEDIDOS ====== */}
-        {activeTab === 'pedidos' && (
+        {/* ====== TAB ACTIVOS ====== */}
+        {activeTab === 'activos' && (
           <>
             {isLoading ? <Spinner /> : (
-              <div className="space-y-8">
-                {/* Sección: Pendientes por aprobar */}
-                {filterBySearch(pendingRequests).length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-yellow-500/10 rounded-lg">
-                        <Clock className="h-5 w-5 text-yellow-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">Pendientes por aprobar</h2>
-                      <Badge variant="warning" className="text-sm px-3 py-1">{pendingRequests.length}</Badge>
-                    </div>
-                    <div className="space-y-4">
-                      {filterBySearch(pendingRequests).map((req: any) => {
-                        const items = req.items || []
-                        const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
-                        const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
-                        return (
-                          <Card key={`req-${req.id}`} className="border-l-4 border-l-yellow-500 hover:shadow-xl transition-all duration-300 overflow-hidden">
-                            <CardContent className="p-0">
-                              <div className="flex flex-col gap-4 p-5">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-2.5 rounded-xl bg-yellow-500/10">
-                                      <User className="h-6 w-6 text-yellow-500" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <h3 className="text-lg font-bold text-foreground">
-                                        {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
-                                      </h3>
-                                      <p className="text-sm text-muted-foreground truncate">
-                                        {itemNames || 'Sin materiales'}
-                                      </p>
-                                    </div>
-                                    <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-                                      <Badge variant="warning" className="text-sm px-3 py-1">Pendiente</Badge>
-                                      <span className="text-sm text-muted-foreground font-medium">#{req.id}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                                      <div className="p-2 bg-primary/10 rounded-lg">
-                                        <Package className="h-4 w-4 text-primary" />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
-                                        <p className="text-base font-medium text-foreground">
-                                          {items.length > 1 ? `${items.length} materiales (${totalQty} uds)` : `x${totalQty}`}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                                      <div className="p-2 bg-blue-500/10 rounded-lg">
-                                        <Calendar className="h-4 w-4 text-blue-400" />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Recogida</p>
-                                        <p className="text-base font-medium text-foreground">{formatDate(req.desired_pickup_date)}</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                                      <div className="p-2 bg-green-500/10 rounded-lg">
-                                        <Calendar className="h-4 w-4 text-green-400" />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolucion</p>
-                                        <p className="text-base font-medium text-foreground">{formatDate(req.desired_return_date)}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {req.purpose && (
-                                    <div className="mt-3 p-3 bg-secondary/10 rounded-xl">
-                                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Motivo</p>
-                                      <p className="text-sm text-foreground">{req.purpose}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Actions - Aprobar/Rechazar */}
-                                {isInventarista && (
-                                  <div className="grid grid-cols-2 gap-3 w-full pt-2 border-t border-border/30 mt-2">
-                                    <Button
-                                      onClick={() => handleOpenApprovalModal('approve', req.id)}
-                                      variant="primary"
-                                      size="lg"
-                                      className="w-full text-base py-3"
-                                    >
-                                      <CheckCircle className="h-5 w-5 mr-2" />
-                                      Aprobar
-                                    </Button>
-                                    <Button
-                                      onClick={() => handleOpenApprovalModal('reject', req.id)}
-                                      variant="destructive"
-                                      size="lg"
-                                      className="w-full text-base py-3"
-                                    >
-                                      <XCircle className="h-5 w-5 mr-2" />
-                                      Rechazar
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sección: Historial de pedidos */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <ClipboardList className="h-5 w-5 text-primary" />
-                    </div>
-                    <h2 className="text-lg font-bold text-foreground">Historial de pedidos</h2>
-                  </div>
-
-                  {filterBySearch([...approvedRequests, ...directLoans.filter((l: any) => !l.loan_request)]).length === 0 ? (
-                    <EmptyState message="No hay pedidos registrados" icon={ClipboardList} />
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Solicitudes procesadas */}
-                      {filterBySearch(approvedRequests).map((req: any) => {
-                        const items = req.items || []
-                        const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
-                        const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
-                        return (
-                          <Card key={`req-h-${req.id}`} className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
-                            <CardContent className="p-0">
-                              <div className="flex flex-col gap-3 p-5">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2 rounded-xl bg-secondary/30">
-                                    <Inbox className="h-5 w-5 text-muted-foreground" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <h3 className="text-base font-bold text-foreground truncate">
-                                      {itemNames || 'Sin materiales'}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                      {req.requester_detail?.full_name || 'N/D'} · x{totalQty}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    {req.status === 'approved' && req.qr_token && (
-                                      <button
-                                        onClick={() => setQrShowModal({
-                                          isOpen: true,
-                                          qrToken: req.qr_token,
-                                          title: 'QR del Pedido',
-                                          subtitle: `Pedido #${req.id} - ${req.requester_detail?.full_name || 'N/D'}`,
-                                        })}
-                                        className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
-                                        title="Ver QR"
-                                      >
-                                        <QrCode className="h-4 w-4 text-primary" />
-                                      </button>
-                                    )}
-                                    <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
-                                      {getStatusLabel(req.status)}
-                                    </Badge>
-                                    <span className="text-sm text-muted-foreground">#{req.id}</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    {formatDate(req.desired_return_date)}
-                                  </span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-
-                      {/* Préstamos directos sin solicitud */}
-                      {filterBySearch(directLoans.filter((l: any) => !l.loan_request)).map((loan: any) => (
-                        <Card key={`loan-d-${loan.id}`} className={`border-l-4 ${getStatusColor(loan.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
-                          <CardContent className="p-0">
-                            <div className="flex flex-col gap-3 p-5">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-primary/10">
-                                  <Package className="h-5 w-5 text-primary" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="text-base font-bold text-foreground truncate">
-                                    {loan.material_detail?.name || `Material #${loan.material}`}
-                                  </h3>
-                                  <p className="text-sm text-muted-foreground">
-                                    {loan.borrower_detail?.full_name || 'N/D'} · x{loan.quantity_loaned}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <Badge variant={getStatusBadgeVariant(loan.status)} className="text-sm px-3 py-1">
-                                    {getStatusLabel(loan.status)}
-                                  </Badge>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="h-3.5 w-3.5" />
-                                  {formatDate(loan.expected_return_date)}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3.5 w-3.5" />
-                                  {formatDate(loan.issued_at)}
-                                </span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
+              <div className="space-y-5">
                 {/* Extensiones pendientes */}
                 {extensions.filter((e: any) => e.status === 'pending').length > 0 && isInventarista && (
                   <div className="space-y-4">
@@ -873,9 +592,53 @@ export default function LoansPage() {
                   </div>
                 )}
 
-                {/* Si todo está vacío */}
-                {pendingRequests.length === 0 && approvedRequests.length === 0 && directLoans.filter((l: any) => !l.loan_request).length === 0 && (
-                  <EmptyState message="No hay pedidos registrados" icon={ClipboardList} />
+                {/* Vencidos primero */}
+                {filterBySearch(activeLoans).filter((l: any) => l.status === 'overdue').length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-500/10 rounded-lg">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      </div>
+                      <h2 className="text-lg font-bold text-foreground">Vencidos</h2>
+                      <Badge variant="danger" className="text-sm px-3 py-1">
+                        {activeLoans.filter((l: any) => l.status === 'overdue').length}
+                      </Badge>
+                    </div>
+                    {filterBySearch(activeLoans).filter((l: any) => l.status === 'overdue').map((loan: any) => (
+                      <LoanCard
+                        key={`loan-${loan.id}`}
+                        loan={loan}
+                        formatDate={formatDate}
+                        getStatusBadgeVariant={getStatusBadgeVariant}
+                        getStatusLabel={getStatusLabel}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Activos */}
+                {filterBySearch(activeLoans).filter((l: any) => l.status === 'active').length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-500/10 rounded-lg">
+                        <Package className="h-5 w-5 text-green-500" />
+                      </div>
+                      <h2 className="text-lg font-bold text-foreground">En circulacion</h2>
+                    </div>
+                    {filterBySearch(activeLoans).filter((l: any) => l.status === 'active').map((loan: any) => (
+                      <LoanCard
+                        key={`loan-${loan.id}`}
+                        loan={loan}
+                        formatDate={formatDate}
+                        getStatusBadgeVariant={getStatusBadgeVariant}
+                        getStatusLabel={getStatusLabel}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {filterBySearch(activeLoans).length === 0 && extensions.filter((e: any) => e.status === 'pending').length === 0 && (
+                  <EmptyState message="No hay prestamos activos en este momento" icon={Package} />
                 )}
               </div>
             )}
@@ -940,54 +703,114 @@ export default function LoansPage() {
           </>
         )}
 
-        {/* ====== MODALS ====== */}
+        {/* ====== TAB HISTORIAL ====== */}
+        {activeTab === 'historial' && (
+          <>
+            {isLoading ? <Spinner /> : (
+              <div className="space-y-5">
+                {filterBySearch([...historyRequests, ...historyLoans]).length === 0 ? (
+                  <EmptyState message="No hay historial de prestamos aun" icon={History} />
+                ) : (
+                  <>
+                    {/* Solicitudes procesadas */}
+                    {filterBySearch(historyRequests).map((req: any) => {
+                      const items = req.items || []
+                      const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
+                      const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
+                      return (
+                        <Card key={`req-h-${req.id}`} className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
+                          <CardContent className="p-0">
+                            <div className="flex flex-col gap-3 p-5">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-secondary/30">
+                                  <Inbox className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="text-base font-bold text-foreground truncate">
+                                    {itemNames || 'Sin materiales'}
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {req.requester_detail?.full_name || 'N/D'} · x{totalQty}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {req.status === 'approved' && req.qr_token && (
+                                    <button
+                                      onClick={() => setQrShowModal({
+                                        isOpen: true,
+                                        qrToken: req.qr_token,
+                                        title: 'QR del Pedido',
+                                        subtitle: `Pedido #${req.id} - ${req.requester_detail?.full_name || 'N/D'}`,
+                                      })}
+                                      className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+                                      title="Ver QR"
+                                    >
+                                      <QrCode className="h-4 w-4 text-primary" />
+                                    </button>
+                                  )}
+                                  <Badge variant={getStatusBadgeVariant(req.status)} className="text-sm px-3 py-1">
+                                    {getStatusLabel(req.status)}
+                                  </Badge>
+                                  <span className="text-sm text-muted-foreground">#{req.id}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  {formatDate(req.desired_return_date)}
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
 
-        {/* Approval Modal */}
-        {approvalModal.isOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md border-2 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <div className={`p-2 rounded-lg ${approvalModal.type === 'approve' ? 'bg-green-500/10' : 'bg-destructive/10'}`}>
-                    {approvalModal.type === 'approve' ? (
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-destructive" />
-                    )}
-                  </div>
-                  {approvalModal.type === 'approve' ? 'Aprobar' : 'Rechazar'} Pedido
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wider">
-                    {approvalModal.type === 'approve' ? 'Notas (opcional)' : 'Motivo del rechazo'}
-                  </label>
-                  <textarea
-                    value={approvalModal.notes}
-                    onChange={(e) => setApprovalModal((prev) => ({ ...prev, notes: e.target.value }))}
-                    className="w-full min-h-[120px] rounded-xl border-2 border-border bg-card px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                    placeholder={approvalModal.type === 'approve' ? 'Notas adicionales...' : 'Motivo del rechazo...'}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    onClick={handleSubmitApproval}
-                    disabled={approvalModal.type === 'reject' && !approvalModal.notes}
-                    size="lg"
-                    className="w-full text-base py-3"
-                    variant={approvalModal.type === 'approve' ? 'primary' : 'destructive'}
-                  >
-                    Confirmar
-                  </Button>
-                  <Button variant="secondary" onClick={handleCloseApprovalModal} size="lg" className="w-full text-base py-3">
-                    Cancelar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    {/* Préstamos completados/devueltos */}
+                    {filterBySearch(historyLoans).map((loan: any) => (
+                      <Card key={`loan-h-${loan.id}`} className={`border-l-4 ${getStatusColor(loan.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
+                        <CardContent className="p-0">
+                          <div className="flex flex-col gap-3 p-5">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-blue-500/10">
+                                <RotateCcw className="h-5 w-5 text-blue-500" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="text-base font-bold text-foreground truncate">
+                                  {loan.material_detail?.name || `Material #${loan.material}`}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {loan.borrower_detail?.full_name || 'N/D'} · x{loan.quantity_loaned}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <Badge variant={getStatusBadgeVariant(loan.status)} className="text-sm px-3 py-1">
+                                  {getStatusLabel(loan.status)}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5" />
+                                Devuelto: {formatDate(loan.actual_return_date || loan.updated_at)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5" />
+                                Prestado: {formatDate(loan.issued_at)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
+
+        {/* ====== MODALS ====== */}
 
         {/* Return Modal */}
         {returnModal.isOpen && (
@@ -1119,7 +942,7 @@ export default function LoansPage() {
           </div>
         )}
 
-        {/* QR Scan Modal - Con camara */}
+        {/* QR Scan Modal */}
         {qrModal.isOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <Card className="w-full max-w-lg border-2 shadow-2xl">
@@ -1220,34 +1043,6 @@ export default function LoansPage() {
                         </p>
                       </div>
                     </div>
-                    {qrModal.result.status === 'pending' && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <Button
-                          onClick={() => {
-                            handleCloseQRModal()
-                            handleOpenApprovalModal('approve', qrModal.result.id)
-                          }}
-                          variant="primary"
-                          size="lg"
-                          className="w-full text-base py-3"
-                        >
-                          <CheckCircle className="h-5 w-5 mr-2" />
-                          Aprobar
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            handleCloseQRModal()
-                            handleOpenApprovalModal('reject', qrModal.result.id)
-                          }}
-                          variant="destructive"
-                          size="lg"
-                          className="w-full text-base py-3"
-                        >
-                          <XCircle className="h-5 w-5 mr-2" />
-                          Rechazar
-                        </Button>
-                      </div>
-                    )}
                     {qrModal.result.status === 'approved' && (
                       <Button
                         onClick={() => handleDeliverFromQR(qrModal.result)}
@@ -1267,7 +1062,6 @@ export default function LoansPage() {
                         </p>
                       </div>
                     )}
-                    {/* Boton para volver a escanear */}
                     <Button
                       variant="secondary"
                       onClick={() => setQrModal((prev) => ({ ...prev, result: null, resultType: null, error: null, token: '' }))}
@@ -1335,7 +1129,7 @@ export default function LoansPage() {
           </div>
         )}
 
-        {/* QR Show Modal - Mostrar QR visual al aprobar */}
+        {/* QR Show Modal */}
         {qrShowModal.isOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <Card className="w-full max-w-sm border-2 shadow-2xl">
@@ -1382,7 +1176,65 @@ export default function LoansPage() {
   )
 }
 
-// ---- Componente de Card para Devoluciones ----
+// ---- Card compacta para tab Activos ----
+function LoanCard({
+  loan,
+  formatDate,
+  getStatusBadgeVariant,
+  getStatusLabel,
+}: {
+  loan: any
+  formatDate: (d?: string) => string
+  getStatusBadgeVariant: (s: string) => any
+  getStatusLabel: (s: string) => string
+}) {
+  const isOverdue = loan.status === 'overdue'
+
+  return (
+    <Card className={`border-l-4 ${isOverdue ? 'border-l-red-500' : 'border-l-green-500'} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-3 p-5">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl ${isOverdue ? 'bg-destructive/10' : 'bg-green-500/10'}`}>
+              {isOverdue ? (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              ) : (
+                <Package className="h-5 w-5 text-green-500" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-bold text-foreground truncate">
+                {loan.material_detail?.name || `Material #${loan.material}`}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {loan.borrower_detail?.full_name || 'N/D'} · x{loan.quantity_loaned}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Badge variant={getStatusBadgeVariant(loan.status)} className="text-sm px-3 py-1">
+                {getStatusLabel(loan.status)}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3.5 w-3.5" />
+              Devolver: {formatDate(loan.expected_return_date)}
+            </span>
+            {loan.days_until_return !== undefined && (
+              <span className={`flex items-center gap-1 ${isOverdue ? 'text-destructive font-medium' : ''}`}>
+                <Clock className="h-3.5 w-3.5" />
+                {loan.days_until_return} dias
+              </span>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---- Card con acciones para tab Devoluciones ----
 function LoanReturnCard({
   loan,
   isInventarista,

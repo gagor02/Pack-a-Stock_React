@@ -10,18 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Button } from '@/components/ui'
 import { Badge } from '@/components/ui'
 import {
-  ClipboardList,
+  Inbox,
   Clock,
   CheckCircle2,
   XCircle,
-  List,
   User,
   Calendar,
   FileText,
   Package,
   MessageSquare,
   ArrowRight,
-  Hash,
 } from 'lucide-react'
 
 interface LoanRequestItem {
@@ -50,25 +48,9 @@ interface LoanRequest {
   created_at?: string
 }
 
-type TabKey = 'pending' | 'approved' | 'rejected' | 'all'
-
-const tabs: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: 'pending', label: 'Pendientes', icon: Clock },
-  { key: 'approved', label: 'Aprobadas', icon: CheckCircle2 },
-  { key: 'rejected', label: 'Rechazadas', icon: XCircle },
-  { key: 'all', label: 'Todas', icon: List },
-]
-
-const statusConfig: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'secondary'; color: string }> = {
-  pending: { label: 'Pendiente', variant: 'warning', color: 'border-l-yellow-500' },
-  approved: { label: 'Aprobada', variant: 'success', color: 'border-l-green-500' },
-  rejected: { label: 'Rechazada', variant: 'danger', color: 'border-l-red-500' },
-}
-
 export default function RequestsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<TabKey>('pending')
   const [actionModal, setActionModal] = useState<{ type: 'approve' | 'reject'; request: LoanRequest } | null>(null)
   const [actionNotes, setActionNotes] = useState('')
 
@@ -91,21 +73,14 @@ export default function RequestsPage() {
     ? requestsResponse
     : requestsResponse?.results ?? []
 
-  const counts = useMemo(() => ({
-    pending: requests.filter((r) => r.status === 'pending').length,
-    approved: requests.filter((r) => r.status === 'approved').length,
-    rejected: requests.filter((r) => r.status === 'rejected').length,
-    all: requests.length,
-  }), [requests])
-
-  const filteredRequests = useMemo(() => {
-    if (activeTab === 'all') return requests
-    return requests.filter((req) => req.status === activeTab)
-  }, [activeTab, requests])
+  const pendingRequests = useMemo(() =>
+    requests.filter((r) => r.status === 'pending'),
+  [requests])
 
   const approveMutation = useMutation({
     mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      await api.post(`/loans/loan-requests/${id}/approve/`, { notes })
+      const response = await api.post(`/loans/loan-requests/${id}/approve/`, { notes })
+      return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loan-requests'] })
@@ -152,46 +127,23 @@ export default function RequestsPage() {
     <DashboardLayout>
       <div className="p-6 space-y-8">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl border border-primary/20">
-            <ClipboardList className="h-7 w-7 text-primary" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl border border-primary/20">
+              <Inbox className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">Solicitudes</h1>
+              <p className="text-base text-muted-foreground mt-1">
+                Solicitudes de empleados pendientes por revisar
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Solicitudes de Prestamo</h1>
-            <p className="text-base text-muted-foreground mt-1">
-              Revisa y gestiona las solicitudes de prestamo
-            </p>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {tabs.map(({ key, label, icon: Icon }) => {
-            const isActive = activeTab === key
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`relative p-5 rounded-xl border-2 transition-all duration-200 text-left ${
-                  isActive
-                    ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10'
-                    : 'border-border/50 bg-card hover:border-primary/30 hover:bg-primary/5'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2 rounded-lg ${isActive ? 'bg-primary/20' : 'bg-secondary/50'}`}>
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <span className={`text-3xl font-bold ${isActive ? 'text-primary' : 'text-foreground'}`}>
-                    {counts[key]}
-                  </span>
-                </div>
-                <p className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {label}
-                </p>
-              </button>
-            )
-          })}
+          {pendingRequests.length > 0 && (
+            <Badge variant="warning" className="text-lg px-4 py-2">
+              {pendingRequests.length} pendiente{pendingRequests.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
         </div>
 
         {/* Content */}
@@ -200,146 +152,116 @@ export default function RequestsPage() {
             <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-primary mb-4"></div>
             <p className="text-base text-muted-foreground">Cargando solicitudes...</p>
           </div>
-        ) : filteredRequests.length === 0 ? (
+        ) : pendingRequests.length === 0 ? (
           <Card className="border-dashed border-2">
             <CardContent className="p-16 text-center">
               <div className="p-4 bg-secondary/30 rounded-2xl w-fit mx-auto mb-6">
-                <ClipboardList className="h-14 w-14 text-muted-foreground" />
+                <CheckCircle2 className="h-14 w-14 text-green-500" />
               </div>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                Sin solicitudes
+                Todo al dia
               </h3>
               <p className="text-base text-muted-foreground max-w-sm mx-auto">
-                No hay solicitudes en esta categoria por el momento.
+                No hay solicitudes pendientes por revisar. Cuando un empleado solicite materiales, aparecera aqui.
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-5">
-            {filteredRequests.map((req) => {
-              const cfg = statusConfig[req.status] || { label: req.status, variant: 'secondary' as const, color: 'border-l-gray-500' }
-              return (
-                <Card
-                  key={req.id}
-                  className={`border-l-4 ${cfg.color} hover:shadow-xl transition-all duration-300 overflow-hidden`}
-                >
-                  <CardContent className="p-0">
-                    {/* Card Header Row */}
-                    <div className="flex items-center justify-between p-5 pb-0">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <Hash className="h-5 w-5 text-primary" />
-                          <span className="text-xl font-bold text-foreground">
-                            {req.id}
+            {pendingRequests.map((req) => (
+              <Card
+                key={req.id}
+                className="border-l-4 border-l-yellow-500 hover:shadow-xl transition-all duration-300 overflow-hidden"
+              >
+                <CardContent className="p-0">
+                  <div className="flex flex-col gap-4 p-5">
+                    {/* Header row */}
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-yellow-500/10">
+                        <User className="h-6 w-6 text-yellow-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold text-foreground">
+                          {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Solicitud #{req.id} · {formatDate(req.created_at)}
+                        </p>
+                      </div>
+                      <Badge variant="warning" className="text-sm px-3 py-1">Pendiente</Badge>
+                    </div>
+
+                    {/* Materiales solicitados */}
+                    <div className="flex flex-wrap gap-2.5">
+                      {req.items?.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl"
+                        >
+                          <Package className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-medium text-foreground">
+                            {item.material_detail?.name || `Material ${item.material}`}
+                          </span>
+                          <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                            x{item.quantity_requested}
                           </span>
                         </div>
-                        <Badge variant={cfg.variant} className="text-sm px-3 py-1">
-                          {cfg.label}
-                        </Badge>
+                      ))}
+                    </div>
+
+                    {/* Info row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                        <div className="p-2 bg-blue-500/10 rounded-lg">
+                          <Calendar className="h-4 w-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Periodo</p>
+                          <p className="text-base font-medium text-foreground">
+                            {formatDate(req.desired_pickup_date)}
+                            <ArrowRight className="h-3.5 w-3.5 inline mx-1.5 text-muted-foreground" />
+                            {formatDate(req.desired_return_date)}
+                          </p>
+                        </div>
                       </div>
-                      {req.created_at && (
-                        <span className="text-sm text-muted-foreground">
-                          {formatDate(req.created_at)}
-                        </span>
+                      {req.purpose && (
+                        <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <FileText className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Motivo</p>
+                            <p className="text-base font-medium text-foreground truncate">{req.purpose}</p>
+                          </div>
+                        </div>
                       )}
                     </div>
 
-                    {/* Card Body */}
-                    <div className="p-5 pt-4 space-y-5">
-                      {/* Info Row */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* Solicitante */}
-                        <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                          <div className="p-2 bg-primary/10 rounded-lg">
-                            <User className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Solicitante</p>
-                            <p className="text-base font-semibold text-foreground mt-0.5">
-                              {req.requester_detail?.full_name || req.requester_detail?.email || 'N/D'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Fechas */}
-                        <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                          <div className="p-2 bg-primary/10 rounded-lg">
-                            <Calendar className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Periodo</p>
-                            <p className="text-base font-semibold text-foreground mt-0.5">
-                              {formatDate(req.desired_pickup_date)}
-                              <ArrowRight className="h-3.5 w-3.5 inline mx-1.5 text-muted-foreground" />
-                              {formatDate(req.desired_return_date)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Motivo */}
-                        {req.purpose && (
-                          <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                              <FileText className="h-5 w-5 text-primary" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Motivo</p>
-                              <p className="text-base font-semibold text-foreground mt-0.5 truncate">
-                                {req.purpose}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Items + Actions Row */}
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        {/* Items */}
-                        <div className="flex flex-wrap gap-2.5">
-                          {req.items?.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl"
-                            >
-                              <Package className="h-4 w-4 text-primary" />
-                              <span className="text-sm font-medium text-foreground">
-                                {item.material_detail?.name || `Material ${item.material}`}
-                              </span>
-                              <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                                x{item.quantity_requested}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Actions */}
-                        {req.status === 'pending' && (
-                          <div className="flex gap-3 flex-shrink-0">
-                            <Button
-                              onClick={() => { setActionModal({ type: 'approve', request: req }); setActionNotes('') }}
-                              size="lg"
-                              className="bg-green-600 hover:bg-green-700 text-base px-6"
-                            >
-                              <CheckCircle2 className="h-5 w-5 mr-2" />
-                              Aprobar
-                            </Button>
-                            <Button
-                              onClick={() => { setActionModal({ type: 'reject', request: req }); setActionNotes('') }}
-                              variant="destructive"
-                              size="lg"
-                              className="text-base px-6"
-                            >
-                              <XCircle className="h-5 w-5 mr-2" />
-                              Rechazar
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                    {/* Actions */}
+                    <div className="grid grid-cols-2 gap-3 w-full pt-2 border-t border-border/30 mt-1">
+                      <Button
+                        onClick={() => { setActionModal({ type: 'approve', request: req }); setActionNotes('') }}
+                        variant="primary"
+                        size="lg"
+                        className="w-full text-base py-3"
+                      >
+                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                        Aprobar
+                      </Button>
+                      <Button
+                        onClick={() => { setActionModal({ type: 'reject', request: req }); setActionNotes('') }}
+                        variant="destructive"
+                        size="lg"
+                        className="w-full text-base py-3"
+                      >
+                        <XCircle className="h-5 w-5 mr-2" />
+                        Rechazar
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </div>
@@ -419,25 +341,25 @@ export default function RequestsPage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex gap-4 pt-3">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={handleAction}
                   disabled={approveMutation.isPending || rejectMutation.isPending}
-                  className={`flex-1 text-base py-3 ${actionModal.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                  className="w-full text-base py-3"
                   variant={actionModal.type === 'reject' ? 'destructive' : 'primary'}
                   size="lg"
                 >
                   {approveMutation.isPending || rejectMutation.isPending
                     ? 'Procesando...'
                     : actionModal.type === 'approve'
-                    ? 'Confirmar Aprobacion'
-                    : 'Confirmar Rechazo'}
+                    ? 'Confirmar'
+                    : 'Rechazar'}
                 </Button>
                 <Button
                   onClick={() => { setActionModal(null); setActionNotes('') }}
                   variant="secondary"
                   size="lg"
-                  className="text-base px-6"
+                  className="w-full text-base py-3"
                 >
                   Cancelar
                 </Button>

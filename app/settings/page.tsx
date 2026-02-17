@@ -24,6 +24,11 @@ import {
   History,
   Trash2,
   CheckCircle,
+  Sparkles,
+  X,
+  ImagePlus,
+  MapPinPlus,
+  ArrowRight,
 } from 'lucide-react'
 
 interface AccountForm {
@@ -52,6 +57,20 @@ export default function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [logoHistory, setLogoHistory] = useState<string[]>([])
+  const [showWelcome, setShowWelcome] = useState(false)
+
+  // Detect new account for welcome banner
+  useEffect(() => {
+    const isNew = localStorage.getItem('new_account')
+    if (isNew === 'true') {
+      setShowWelcome(true)
+    }
+  }, [])
+
+  const dismissWelcome = () => {
+    setShowWelcome(false)
+    localStorage.removeItem('new_account')
+  }
 
   // Load logo history from localStorage
   useEffect(() => {
@@ -260,6 +279,69 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* Welcome Banner for New Accounts */}
+        {showWelcome && (
+          <div className="relative p-5 rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5">
+            <button
+              onClick={dismissWelcome}
+              className="absolute top-3 right-3 p-1 rounded-lg hover:bg-primary/10 transition-colors"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <div className="flex items-start gap-4">
+              <div className="p-2.5 bg-primary/15 rounded-xl border border-primary/20">
+                <Sparkles className="h-7 w-7 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-foreground mb-1">
+                  Bienvenido a Pack-a-Stock
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Tu cuenta fue creada exitosamente. Completa estos pasos para comenzar a usar el sistema:
+                </p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div
+                    className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 cursor-pointer hover:border-primary/30 transition-colors"
+                    onClick={() => { setIsEditing(true); dismissWelcome() }}
+                  >
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <ImagePlus className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Sube tu logo</p>
+                      <p className="text-xs text-muted-foreground">Personaliza tu empresa</p>
+                    </div>
+                  </div>
+                  <div
+                    className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 cursor-pointer hover:border-primary/30 transition-colors"
+                    onClick={() => { setIsEditing(true); dismissWelcome() }}
+                  >
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <MapPinPlus className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Agrega dirección</p>
+                      <p className="text-xs text-muted-foreground">Completa tu info</p>
+                    </div>
+                  </div>
+                  <div
+                    className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 cursor-pointer hover:border-primary/30 transition-colors"
+                    onClick={() => { dismissWelcome(); router.push('/locations') }}
+                  >
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <MapPin className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Crea ubicaciones</p>
+                      <p className="text-xs text-muted-foreground">Organiza tu inventario</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left Column - Company Profile */}
