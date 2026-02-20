@@ -1,666 +1,685 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useChartColors } from '@/hooks/useChartColors'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Button } from '@/components/ui'
-import { Input } from '@/components/ui'
 import { Badge } from '@/components/ui'
 import {
-  BarChart3,
-  Download,
-  FileText,
-  Package,
-  ArrowLeftRight,
-  Users,
-  Calendar,
-  Filter,
-  Search,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  XCircle,
+  BarChart3, Download, FileText, Package, ArrowLeftRight, Users,
+  Calendar, Search, AlertCircle, CheckCircle,
+  Activity, Star, Shield,
 } from 'lucide-react'
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from 'recharts'
 
-type ReportType = 'materials' | 'loans' | 'users' | 'overview'
+// ─── CSV Export Helper ────────────────────────────────────────────────────────
+function exportToCSV(rows: (string | number | null | undefined)[][], filename: string) {
+  const BOM = '\uFEFF'
+  const csv = rows
+    .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${filename}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+type Tab = 'overview' | 'loans' | 'materials' | 'audit'
+type DateFilter = 'week' | 'month' | 'all'
+
+function formatDate(d: string | null | undefined) {
+  if (!d) return 'N/A'
+  return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+function formatDateTime(d: string | null | undefined) {
+  if (!d) return 'N/A'
+  return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Activo', returned: 'Devuelto', overdue: 'Vencido',
+  pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada',
+  available: 'Disponible', on_loan: 'En préstamo', maintenance: 'Mantenimiento', lost: 'Perdido',
+}
+const getStatusVariant = (s: string): any =>
+  ({ active: 'success', approved: 'success', returned: 'default', pending: 'warning', rejected: 'danger', overdue: 'danger' }[s] || 'default')
 
 export default function ReportsPage() {
-  const router = useRouter()
-  const [selectedReport, setSelectedReport] = useState<ReportType>('overview')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [dateRange, setDateRange] = useState({
-    start: '',
-    end: '',
+  const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('month')
+  const [search, setSearch] = useState('')
+  const chart = useChartColors()
+  const TOOLTIP_STYLE = chart.tooltipStyle
+
+  // ─── Queries ─────────────────────────────────────────────────────────────────
+  const { data: matRes, isLoading: matLoading } = useQuery({
+    queryKey: ['materials'], queryFn: async () => (await api.get('/materials/materials/')).data, staleTime: 30000,
+  })
+  const { data: loansRes, isLoading: loansLoading } = useQuery({
+    queryKey: ['loans'], queryFn: async () => (await api.get('/loans/loans/')).data, staleTime: 30000,
+  })
+  const { data: reqRes, isLoading: reqLoading } = useQuery({
+    queryKey: ['loan-requests'], queryFn: async () => (await api.get('/loans/loan-requests/')).data, staleTime: 30000,
+  })
+  const { data: usersRes, isLoading: usersLoading } = useQuery({
+    queryKey: ['users'], queryFn: async () => (await api.get('/auth/users/')).data, staleTime: 30000,
+  })
+  const { data: catRes } = useQuery({
+    queryKey: ['categories'], queryFn: async () => (await api.get('/materials/categories/')).data, staleTime: 30000,
   })
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      router.push('/login')
-    }
-  }, [router])
+  const materials = Array.isArray(matRes) ? matRes : matRes?.results ?? []
+  const loans = Array.isArray(loansRes) ? loansRes : loansRes?.results ?? []
+  const requests = Array.isArray(reqRes) ? reqRes : reqRes?.results ?? []
+  const users = Array.isArray(usersRes) ? usersRes : usersRes?.results ?? []
+  const categories = Array.isArray(catRes) ? catRes : catRes?.results ?? []
 
-  // Fetch all data
-  const { data: materialsResponse, isLoading: materialsLoading } = useQuery({
-    queryKey: ['materials'],
-    queryFn: async () => {
-      const response = await api.get('/materials/materials/')
-      return response.data
-    },
-    retry: 1,
-    staleTime: 30000,
-  })
+  const isLoading = matLoading || loansLoading || reqLoading || usersLoading
 
-  const { data: loansResponse, isLoading: loansLoading } = useQuery({
-    queryKey: ['loans'],
-    queryFn: async () => {
-      const response = await api.get('/loans/loans/')
-      return response.data
-    },
-    retry: 1,
-    staleTime: 30000,
-  })
+  // ─── Date filter cutoff ───────────────────────────────────────────────────────
+  const cutoff = useMemo(() => {
+    if (dateFilter === 'week') return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    if (dateFilter === 'month') return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    return null
+  }, [dateFilter])
 
-  const { data: requestsResponse, isLoading: requestsLoading } = useQuery({
-    queryKey: ['loan-requests'],
-    queryFn: async () => {
-      const response = await api.get('/loans/loan-requests/')
-      return response.data
-    },
-    retry: 1,
-    staleTime: 30000,
-  })
-
-  const { data: usersResponse, isLoading: usersLoading } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await api.get('/auth/users/')
-      return response.data
-    },
-    retry: 1,
-    staleTime: 30000,
-  })
-
-  const { data: categoriesResponse } = useQuery({
-    queryKey: ['categories'],
-    queryFn: async () => {
-      const response = await api.get('/materials/categories/')
-      return response.data
-    },
-    retry: 1,
-    staleTime: 30000,
-  })
-
-  // Normalize data
-  const materials = Array.isArray(materialsResponse)
-    ? materialsResponse
-    : materialsResponse?.results ?? []
-
-  const loans = Array.isArray(loansResponse)
-    ? loansResponse
-    : loansResponse?.results ?? []
-
-  const requests = Array.isArray(requestsResponse)
-    ? requestsResponse
-    : requestsResponse?.results ?? []
-
-  const users = Array.isArray(usersResponse)
-    ? usersResponse
-    : usersResponse?.results ?? []
-
-  const categories = Array.isArray(categoriesResponse)
-    ? categoriesResponse
-    : categoriesResponse?.results ?? []
-
-  // Calculate statistics
-  const stats = useMemo(() => {
-    return {
-      materials: {
-        total: materials.length,
-        available: materials.filter((m: any) => m.status === 'available').length,
-        inUse: materials.filter((m: any) => m.status === 'in_use').length,
-        lowStock: materials.filter((m: any) => m.is_low_stock).length,
-        byCategory: categories.map((cat: any) => ({
-          name: cat.name,
-          count: materials.filter((m: any) => m.category === cat.id).length,
-        })),
-      },
-      loans: {
-        total: loans.length,
-        active: loans.filter((l: any) => l.status === 'active').length,
-        overdue: loans.filter((l: any) => l.status === 'overdue' || l.is_overdue).length,
-        returned: loans.filter((l: any) => l.status === 'returned').length,
-      },
-      requests: {
-        total: requests.length,
-        pending: requests.filter((r: any) => r.status === 'pending').length,
-        approved: requests.filter((r: any) => r.status === 'approved').length,
-        rejected: requests.filter((r: any) => r.status === 'rejected').length,
-      },
-      users: {
-        total: users.length,
-        inventaristas: users.filter((u: any) => u.user_type === 'inventarista').length,
-        empleados: users.filter((u: any) => u.user_type === 'empleado').length,
-      },
-    }
-  }, [materials, loans, requests, users, categories])
-
-  // Top borrowed materials
-  const topBorrowedMaterials = useMemo(() => {
-    const materialLoans = new Map<number, { name: string; count: number }>()
-
-    loans.forEach((loan: any) => {
-      const materialId = loan.material
-      const materialName = loan.material_detail?.name || 'Desconocido'
-
-      if (materialLoans.has(materialId)) {
-        materialLoans.get(materialId)!.count++
-      } else {
-        materialLoans.set(materialId, { name: materialName, count: 1 })
-      }
-    })
-
-    return Array.from(materialLoans.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-  }, [loans])
-
-  // Most active borrowers
-  const mostActiveBorrowers = useMemo(() => {
-    const borrowerLoans = new Map<number, { name: string; count: number }>()
-
-    loans.forEach((loan: any) => {
-      const borrowerId = loan.borrower
-      const borrowerName = loan.borrower_detail?.full_name || 'Desconocido'
-
-      if (borrowerLoans.has(borrowerId)) {
-        borrowerLoans.get(borrowerId)!.count++
-      } else {
-        borrowerLoans.set(borrowerId, { name: borrowerName, count: 1 })
-      }
-    })
-
-    return Array.from(borrowerLoans.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-  }, [loans])
-
-  // Loan trends by month
-  const loanTrendsByMonth = useMemo(() => {
-    const monthlyData = new Map<string, number>()
-
-    loans.forEach((loan: any) => {
-      const date = new Date(loan.created_at || loan.issued_at)
-      const monthKey = date.toLocaleDateString('es-ES', { year: 'numeric', month: 'short' })
-
-      monthlyData.set(monthKey, (monthlyData.get(monthKey) || 0) + 1)
-    })
-
-    return Array.from(monthlyData.entries())
-      .map(([month, count]) => ({ month, préstamos: count }))
-      .slice(-6)
-  }, [loans])
-
-  // Request approval rate
-  const requestStats = useMemo(() => {
-    return [
-      { name: 'Aprobadas', value: stats.requests.approved, color: '#22c55e' },
-      { name: 'Rechazadas', value: stats.requests.rejected, color: '#ef4444' },
-      { name: 'Pendientes', value: stats.requests.pending, color: '#f59e0b' },
-    ].filter(item => item.value > 0)
-  }, [stats.requests])
-
-  const isLoading = materialsLoading || loansLoading || requestsLoading || usersLoading
-
-  // Export function placeholder
-  const handleExport = (format: 'excel' | 'pdf') => {
-    // TODO: Implement actual export functionality
-    alert(`Exportando reporte en formato ${format.toUpperCase()}...`)
+  const inRange = (dateStr: string | null | undefined) => {
+    if (!dateStr || !cutoff) return true
+    return new Date(dateStr) >= cutoff
   }
 
-  // Filter materials by search
-  const filteredMaterials = useMemo(() => {
-    return materials.filter((m: any) =>
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [materials, searchTerm])
+  // ─── Filtered data ────────────────────────────────────────────────────────────
+  const filteredLoans = useMemo(() =>
+    loans.filter((l: any) => {
+      const d = l.issued_at || l.created_at
+      if (!inRange(d)) return false
+      if (!search) return true
+      const s = search.toLowerCase()
+      return (
+        l.material_detail?.name?.toLowerCase().includes(s) ||
+        l.borrower_detail?.full_name?.toLowerCase().includes(s) ||
+        String(l.id).includes(s)
+      )
+    }), [loans, cutoff, search])
 
-  // Filter loans by search
-  const filteredLoans = useMemo(() => {
-    return loans.filter((l: any) =>
-      l.material_detail?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.borrower_detail?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredMaterials = useMemo(() =>
+    materials.filter((m: any) => {
+      if (!search) return true
+      const s = search.toLowerCase()
+      return m.name?.toLowerCase().includes(s) || m.sku?.toLowerCase().includes(s) || m.category_detail?.name?.toLowerCase().includes(s)
+    }), [materials, search])
+
+  // ─── Stats ────────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    materials: {
+      total: materials.length,
+      available: materials.filter((m: any) => m.status === 'available').length,
+      inUse: materials.filter((m: any) => m.status === 'in_use').length,
+      lowStock: materials.filter((m: any) => m.is_low_stock).length,
+    },
+    loans: {
+      total: filteredLoans.length,
+      active: filteredLoans.filter((l: any) => l.status === 'active').length,
+      overdue: filteredLoans.filter((l: any) => l.status === 'overdue' || l.is_overdue).length,
+      returned: filteredLoans.filter((l: any) => l.status === 'returned').length,
+    },
+    requests: {
+      total: requests.filter((r: any) => inRange(r.created_at || r.request_date)).length,
+      pending: requests.filter((r: any) => inRange(r.created_at || r.request_date) && r.status === 'pending').length,
+      approved: requests.filter((r: any) => inRange(r.created_at || r.request_date) && r.status === 'approved').length,
+      rejected: requests.filter((r: any) => inRange(r.created_at || r.request_date) && r.status === 'rejected').length,
+    },
+    users: { total: users.length },
+  }), [materials, filteredLoans, requests, users, cutoff])
+
+  // ─── Charts data ──────────────────────────────────────────────────────────────
+  const topMaterials = useMemo(() => {
+    const map = new Map<number, { name: string; count: number }>()
+    filteredLoans.forEach((l: any) => {
+      const id = l.material; const name = l.material_detail?.name || 'Desconocido'
+      map.set(id, { name, count: (map.get(id)?.count || 0) + 1 })
+    })
+    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [filteredLoans])
+
+  const topBorrowers = useMemo(() => {
+    const map = new Map<number, { name: string; count: number }>()
+    filteredLoans.forEach((l: any) => {
+      const id = l.borrower; const name = l.borrower_detail?.full_name || 'Desconocido'
+      map.set(id, { name, count: (map.get(id)?.count || 0) + 1 })
+    })
+    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [filteredLoans])
+
+  const loanTrendsData = useMemo(() => {
+    const days = dateFilter === 'week' ? 7 : 30
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (days - 1 - i))
+      const key = d.toISOString().split('T')[0]
+      const dayLoans = loans.filter((l: any) => (l.issued_at || l.created_at)?.startsWith(key)).length
+      const dayReqs = requests.filter((r: any) => (r.created_at || r.request_date)?.startsWith(key)).length
+      return {
+        date: d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }),
+        prestamos: dayLoans,
+        solicitudes: dayReqs,
+      }
+    })
+  }, [loans, requests, dateFilter])
+
+  const requestStatusData = useMemo(() => [
+    { name: 'Aprobadas', value: stats.requests.approved, color: '#22c55e' },
+    { name: 'Rechazadas', value: stats.requests.rejected, color: '#ef4444' },
+    { name: 'Pendientes', value: stats.requests.pending, color: '#f59e0b' },
+  ].filter(i => i.value > 0), [stats.requests])
+
+  const materialsCategoryData = useMemo(() => {
+    return categories
+      .map((cat: any) => ({
+        name: cat.name,
+        count: materials.filter((m: any) => m.category === cat.id).length,
+      }))
+      .filter((item: any) => item.count > 0)
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 8)
+  }, [materials, categories])
+
+  // ─── Audit log ────────────────────────────────────────────────────────────────
+  const auditLog = useMemo(() => {
+    const events: any[] = []
+
+    loans.forEach((l: any) => {
+      const d = l.issued_at || l.created_at
+      if (!inRange(d)) return
+      events.push({
+        id: `loan-${l.id}`,
+        type: 'loan',
+        action: 'Préstamo emitido',
+        user: l.borrower_detail?.full_name || 'N/A',
+        detail: `${l.material_detail?.name || 'Material'} · ${l.quantity_loaned || 1} unidad(es)`,
+        status: l.status,
+        date: d,
+        approvedBy: l.approved_by_detail?.full_name,
+      })
+      if (l.status === 'returned' && l.returned_at) {
+        events.push({
+          id: `return-${l.id}`,
+          type: 'return',
+          action: 'Devolución registrada',
+          user: l.borrower_detail?.full_name || 'N/A',
+          detail: `${l.material_detail?.name || 'Material'} · condición: ${l.return_condition || 'N/A'}`,
+          status: 'returned',
+          date: l.returned_at,
+        })
+      }
+    })
+
+    requests.forEach((r: any) => {
+      const d = r.created_at || r.request_date
+      if (!inRange(d)) return
+      events.push({
+        id: `req-${r.id}`,
+        type: 'request',
+        action: `Solicitud ${r.status === 'pending' ? 'creada' : r.status === 'approved' ? 'aprobada' : 'rechazada'}`,
+        user: r.requester_detail?.full_name || 'N/A',
+        detail: r.notes || `${r.items?.length || 0} item(s) solicitado(s)`,
+        status: r.status,
+        date: d,
+        approvedBy: r.reviewed_by_detail?.full_name,
+      })
+    })
+
+    return events
+      .filter(e => {
+        if (!search) return true
+        const s = search.toLowerCase()
+        return e.user.toLowerCase().includes(s) || e.action.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s)
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [loans, requests, cutoff, search])
+
+  // ─── Exports ──────────────────────────────────────────────────────────────────
+  const exportLoans = () => {
+    const headers = ['ID', 'Material', 'Usuario', 'Cantidad', 'Fecha Préstamo', 'Vencimiento', 'Estado', 'Aprobado por']
+    const rows = filteredLoans.map((l: any) => [
+      l.id, l.material_detail?.name || 'N/A', l.borrower_detail?.full_name || 'N/A',
+      l.quantity_loaned, formatDate(l.issued_at || l.created_at),
+      formatDate(l.expected_return_date), STATUS_LABELS[l.status] || l.status,
+      l.approved_by_detail?.full_name || 'N/A',
+    ])
+    exportToCSV([headers, ...rows], `prestamos-${dateFilter}-${new Date().toISOString().split('T')[0]}`)
+  }
+
+  const exportMaterials = () => {
+    const headers = ['ID', 'Nombre', 'SKU', 'Categoría', 'Stock Total', 'Disponible', 'Estado', 'Stock Bajo']
+    const rows = filteredMaterials.map((m: any) => [
+      m.id, m.name, m.sku || 'N/A', m.category_detail?.name || 'Sin categoría',
+      m.quantity, m.available_quantity,
+      STATUS_LABELS[m.status] || m.status, m.is_low_stock ? 'Sí' : 'No',
+    ])
+    exportToCSV([headers, ...rows], `materiales-${new Date().toISOString().split('T')[0]}`)
+  }
+
+  const exportAudit = () => {
+    const headers = ['Fecha/Hora', 'Acción', 'Usuario', 'Detalle', 'Estado', 'Aprobado por']
+    const rows = auditLog.map((e: any) => [
+      formatDateTime(e.date), e.action, e.user, e.detail,
+      STATUS_LABELS[e.status] || e.status, e.approvedBy || 'N/A',
+    ])
+    exportToCSV([headers, ...rows], `auditoria-${dateFilter}-${new Date().toISOString().split('T')[0]}`)
+  }
+
+  // ─── UI Helpers ───────────────────────────────────────────────────────────────
+  const TABS: { id: Tab; label: string; icon: any; count?: number }[] = [
+    { id: 'overview', label: 'Vista General', icon: BarChart3 },
+    { id: 'loans', label: 'Préstamos', icon: ArrowLeftRight, count: stats.loans.total },
+    { id: 'materials', label: 'Materiales', icon: Package, count: filteredMaterials.length },
+    { id: 'audit', label: 'Auditoría', icon: Shield, count: auditLog.length },
+  ]
+
+  const DATE_FILTERS: { id: DateFilter; label: string }[] = [
+    { id: 'week', label: 'Última semana' },
+    { id: 'month', label: 'Último mes' },
+    { id: 'all', label: 'Todo el tiempo' },
+  ]
+
+  const TYPE_ICONS: Record<string, any> = {
+    loan: { icon: ArrowLeftRight, color: 'text-green-400', bg: 'bg-green-500/10' },
+    return: { icon: CheckCircle, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    request: { icon: FileText, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+  }
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh] flex-col gap-4">
+          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-primary" />
+          <p className="text-muted-foreground">Cargando reportes...</p>
+        </div>
+      </DashboardLayout>
     )
-  }, [loans, searchTerm])
+  }
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <BarChart3 className="h-6 w-6 text-primary" />
+            <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl border border-primary/20">
+              <BarChart3 className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Reportes y Análisis</h1>
-              <p className="text-sm text-muted-foreground">
-                Estadísticas y métricas del sistema
-              </p>
+              <h1 className="text-3xl font-bold tracking-tight">Reportes y Auditoría</h1>
+              <p className="text-sm text-muted-foreground">Análisis completo · rastreo de personas y pedidos</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => handleExport('excel')} variant="secondary" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar Excel
-            </Button>
-            <Button onClick={() => handleExport('pdf')} variant="secondary" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar PDF
-            </Button>
+          {/* Date filter pills */}
+          <div className="flex items-center gap-2 p-1 bg-secondary/40 rounded-xl border border-border/50">
+            <Calendar className="h-4 w-4 text-muted-foreground ml-2" />
+            {DATE_FILTERS.map(f => (
+              <button key={f.id} onClick={() => setDateFilter(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${dateFilter === f.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Report Type Selector */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card
-            className={`cursor-pointer transition-all ${
-              selectedReport === 'overview'
-                ? 'border-primary shadow-md'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => setSelectedReport('overview')}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Vista General</p>
-                  <p className="text-xs text-muted-foreground">Resumen completo</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all ${
-              selectedReport === 'materials'
-                ? 'border-primary shadow-md'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => setSelectedReport('materials')}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-success/10 rounded-lg">
-                  <Package className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Materiales</p>
-                  <p className="text-xs text-muted-foreground">{stats.materials.total} items</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all ${
-              selectedReport === 'loans'
-                ? 'border-primary shadow-md'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => setSelectedReport('loans')}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-warning/10 rounded-lg">
-                  <ArrowLeftRight className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Préstamos</p>
-                  <p className="text-xs text-muted-foreground">{stats.loans.total} registros</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all ${
-              selectedReport === 'users'
-                ? 'border-primary shadow-md'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => setSelectedReport('users')}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Usuarios</p>
-                  <p className="text-xs text-muted-foreground">{stats.users.total} usuarios</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+        <div className="flex gap-1 p-1 bg-secondary/30 rounded-xl border border-border/50 w-fit">
+          {TABS.map(tab => {
+            const Icon = tab.icon
+            const active = activeTab === tab.id
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-card shadow-sm text-foreground border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${active ? 'bg-primary/20 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
-        {/* Overview Report */}
-        {selectedReport === 'overview' && (
-          <>
-            {/* Key Metrics */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Total Materiales
-                    </div>
-                    <Package className="h-8 w-8 text-primary" />
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* TAB: VISTA GENERAL                                                  */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: 'Materiales totales', value: stats.materials.total, sub: `${stats.materials.available} disponibles`, icon: Package, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/30' },
+                { label: 'Préstamos', value: stats.loans.total, sub: `${stats.loans.overdue} vencidos`, icon: ArrowLeftRight, color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30' },
+                { label: 'Solicitudes', value: stats.requests.total, sub: `${stats.requests.approved} aprobadas`, icon: FileText, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+                { label: 'Usuarios', value: stats.users.total, sub: 'registrados', icon: Users, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30' },
+              ].map(({ label, value, sub, icon: Icon, color, bg, border }) => (
+                <div key={label} className={`p-5 rounded-xl border-2 ${border} bg-card`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`p-2.5 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+                    <span className={`text-4xl font-black ${color}`}>{value}</span>
                   </div>
-                  <div className="text-3xl font-bold text-foreground mb-2">
-                    {stats.materials.total}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <TrendingUp className="h-4 w-4 text-success" />
-                    <span className="text-success">{stats.materials.available} disponibles</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Préstamos Activos
-                    </div>
-                    <ArrowLeftRight className="h-8 w-8 text-success" />
-                  </div>
-                  <div className="text-3xl font-bold text-foreground mb-2">
-                    {stats.loans.active}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <AlertCircle className="h-4 w-4 text-destructive" />
-                    <span className="text-destructive">{stats.loans.overdue} vencidos</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Solicitudes Pendientes
-                    </div>
-                    <FileText className="h-8 w-8 text-warning" />
-                  </div>
-                  <div className="text-3xl font-bold text-foreground mb-2">
-                    {stats.requests.pending}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-success" />
-                    <span className="text-success">{stats.requests.approved} aprobadas</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Stock Bajo
-                    </div>
-                    <AlertCircle className="h-8 w-8 text-warning" />
-                  </div>
-                  <div className="text-3xl font-bold text-warning mb-2">
-                    {stats.materials.lowStock}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <TrendingDown className="h-4 w-4 text-warning" />
-                    <span className="text-muted-foreground">Requiere atención</span>
-                  </div>
-                </CardContent>
-              </Card>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+                  <p className="text-sm text-muted-foreground">{sub}</p>
+                </div>
+              ))}
             </div>
 
-            {/* Charts Row */}
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Loan Trends */}
-              <Card>
+            {/* Charts row */}
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Tendencia */}
+              <Card className="border-2 lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>Tendencia de Préstamos (6 meses)</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg"><Activity className="h-5 w-5 text-primary" /></div>
+                    <div>
+                      <CardTitle className="text-lg">Tendencia de actividad</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {dateFilter === 'week' ? 'Últimos 7 días' : dateFilter === 'month' ? 'Últimos 30 días' : 'Historial completo'}
+                      </p>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={loanTrendsByMonth}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="month" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                      <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1f2937',
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="préstamos"
-                        stroke="#8b5cf6"
-                        strokeWidth={2}
-                        dot={{ fill: '#8b5cf6', r: 4 }}
-                      />
-                    </LineChart>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={loanTrendsData}>
+                      <defs>
+                        <linearGradient id="gP" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} /><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gS" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                      <XAxis dataKey="date" stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} />
+                      <YAxis stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Area type="monotone" dataKey="prestamos" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#gP)" name="Préstamos" dot={false} />
+                      <Area type="monotone" dataKey="solicitudes" stroke="#f59e0b" strokeWidth={2} fill="url(#gS)" name="Solicitudes" dot={false} />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              {/* Request Status Distribution */}
-              <Card>
+              {/* Solicitudes pie */}
+              <Card className="border-2">
                 <CardHeader>
-                  <CardTitle>Distribución de Solicitudes</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-lg"><FileText className="h-5 w-5 text-amber-400" /></div>
+                    <CardTitle className="text-lg">Solicitudes</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={180}>
                     <PieChart>
-                      <Pie
-                        data={requestStats}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={(props: any) =>
-                          `${props.name} ${((props.percent ?? 0) * 100).toFixed(0)}%`
-                        }
-                        outerRadius={100}
-                        dataKey="value"
-                      >
-                        {requestStats.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
+                      <Pie data={requestStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none">
+                        {requestStatusData.map((e, i) => <Cell key={i} fill={e.color} />)}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1f2937',
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                        }}
-                      />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="space-y-2 mt-2">
+                    {requestStatusData.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 bg-secondary/20 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm">{item.name}</span>
+                        </div>
+                        <span className="font-bold">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Top Lists Row */}
+            {/* Top listas */}
             <div className="grid lg:grid-cols-2 gap-6">
-              {/* Top Borrowed Materials */}
-              <Card>
+              {/* Top materiales */}
+              <Card className="border-2">
                 <CardHeader>
-                  <CardTitle>Materiales Más Prestados</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-lg"><Star className="h-5 w-5 text-amber-400" /></div>
+                    <CardTitle className="text-lg">Materiales más prestados</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {topBorrowedMaterials.slice(0, 5).map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between pb-3 border-b border-border last:border-0"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                            {index + 1}
-                          </div>
-                          <span className="text-sm font-medium text-foreground">
-                            {item.name}
-                          </span>
-                        </div>
-                        <Badge variant="default">{item.count} préstamos</Badge>
-                      </div>
-                    ))}
-                  </div>
+                  {topMaterials.length === 0
+                    ? <p className="text-center text-muted-foreground py-8 text-sm">Sin datos en el período</p>
+                    : <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={topMaterials} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                        <XAxis type="number" stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} />
+                        <YAxis dataKey="name" type="category" stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} width={120} />
+                        <Tooltip contentStyle={TOOLTIP_STYLE} />
+                        <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="Préstamos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  }
                 </CardContent>
               </Card>
 
-              {/* Most Active Borrowers */}
-              <Card>
+              {/* Top usuarios */}
+              <Card className="border-2">
                 <CardHeader>
-                  <CardTitle>Usuarios Más Activos</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-500/10 rounded-lg"><Users className="h-5 w-5 text-green-400" /></div>
+                    <CardTitle className="text-lg">Usuarios más activos</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {mostActiveBorrowers.slice(0, 5).map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between pb-3 border-b border-border last:border-0"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-success/10 text-success font-semibold text-sm">
-                            {index + 1}
+                  {topBorrowers.length === 0
+                    ? <p className="text-center text-muted-foreground py-8 text-sm">Sin datos en el período</p>
+                    : <div className="space-y-3">
+                      {topBorrowers.slice(0, 6).map((item, i) => {
+                        const pct = topBorrowers[0].count > 0 ? (item.count / topBorrowers[0].count) * 100 : 0
+                        const colors = ['bg-primary', 'bg-violet-500', 'bg-blue-500', 'bg-cyan-500', 'bg-teal-500', 'bg-emerald-500']
+                        return (
+                          <div key={i}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground w-5 font-bold">#{i + 1}</span>
+                                <span className="text-sm font-medium truncate max-w-[180px]">{item.name}</span>
+                              </div>
+                              <span className="text-sm font-bold">{item.count} préstamos</span>
+                            </div>
+                            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                              <div className={`h-full ${colors[i % colors.length]} rounded-full`} style={{ width: `${pct}%` }} />
+                            </div>
                           </div>
-                          <span className="text-sm font-medium text-foreground">
-                            {item.name}
-                          </span>
-                        </div>
-                        <Badge variant="success">{item.count} préstamos</Badge>
-                      </div>
-                    ))}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  }
                 </CardContent>
               </Card>
             </div>
-          </>
-        )}
 
-        {/* Materials Report */}
-        {selectedReport === 'materials' && (
-          <>
-            {/* Search and Filters */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Buscar materiales por nombre o SKU..."
-                      value={searchTerm}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Button variant="secondary">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filtros
-                  </Button>
+            {/* Materiales por categoría */}
+            <Card className="border-2">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/10 rounded-lg"><Package className="h-5 w-5 text-blue-400" /></div>
+                  <CardTitle className="text-lg">Materiales por categoría</CardTitle>
                 </div>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={materialsCategoryData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                    <XAxis dataKey="name" stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} />
+                    <YAxis stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 11 }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Materiales" />
+                  </BarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
+          </div>
+        )}
 
-            {/* Materials Table */}
-            <Card>
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* TAB: PRÉSTAMOS                                                       */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'loans' && (
+          <div className="space-y-5">
+            {/* search + export */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por material, usuario o ID..."
+                  className="w-full rounded-xl border-2 border-border bg-card px-5 py-3 pl-11 text-base outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <Button onClick={exportLoans} className="gap-2 rounded-xl border-2 border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20 px-5 py-3 h-auto">
+                <Download className="h-4 w-4" /> Exportar CSV
+              </Button>
+            </div>
+
+            {/* summary strips */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total en período', value: stats.loans.total, color: 'text-foreground' },
+                { label: 'Activos', value: stats.loans.active, color: 'text-green-400' },
+                { label: 'Vencidos', value: stats.loans.overdue, color: 'text-red-400' },
+                { label: 'Devueltos', value: stats.loans.returned, color: 'text-muted-foreground' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="p-4 rounded-xl border-2 border-border/50 bg-card text-center">
+                  <p className={`text-3xl font-black ${color}`}>{value}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* table */}
+            <Card className="border-2">
               <CardHeader>
-                <CardTitle>Inventario de Materiales ({filteredMaterials.length})</CardTitle>
+                <CardTitle className="text-base">
+                  Historial de Préstamos — {filteredLoans.length} registro(s)
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="border-b border-border">
-                      <tr className="text-left">
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Material
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          SKU
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Categoría
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Stock
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Disponible
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Estado
-                        </th>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {['ID', 'Material', 'Usuario', 'Cant.', 'Fecha', 'Vencimiento', 'Estado', 'Aprobado por'].map(h => (
+                          <th key={h} className="pb-3 pr-4 text-left text-xs text-muted-foreground font-medium uppercase tracking-wider">{h}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMaterials.slice(0, 20).map((material: any) => (
-                        <tr key={material.id} className="border-b border-border last:border-0">
-                          <td className="py-3 text-sm font-medium text-foreground">
-                            {material.name}
+                      {filteredLoans.length === 0 && (
+                        <tr><td colSpan={8} className="py-10 text-center text-muted-foreground">Sin préstamos en el período seleccionado</td></tr>
+                      )}
+                      {filteredLoans.map((l: any) => (
+                        <tr key={l.id} className="border-b border-border/40 hover:bg-secondary/10 transition-colors">
+                          <td className="py-3 pr-4 font-medium text-primary">#{l.id}</td>
+                          <td className="py-3 pr-4 font-medium">{l.material_detail?.name || 'N/A'}</td>
+                          <td className="py-3 pr-4 text-muted-foreground">{l.borrower_detail?.full_name || 'N/A'}</td>
+                          <td className="py-3 pr-4">{l.quantity_loaned || 1}</td>
+                          <td className="py-3 pr-4 text-muted-foreground whitespace-nowrap">{formatDate(l.issued_at || l.created_at)}</td>
+                          <td className="py-3 pr-4 text-muted-foreground whitespace-nowrap">{formatDate(l.expected_return_date)}</td>
+                          <td className="py-3 pr-4">
+                            <Badge variant={getStatusVariant(l.status)}>{STATUS_LABELS[l.status] || l.status}</Badge>
                           </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {material.sku || 'N/A'}
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {material.category_detail?.name || 'Sin categoría'}
-                          </td>
-                          <td className="py-3 text-sm text-foreground">{material.quantity}</td>
-                          <td className="py-3 text-sm text-foreground">
-                            {material.available_quantity}
+                          <td className="py-3 text-muted-foreground">{l.approved_by_detail?.full_name || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* TAB: MATERIALES                                                      */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'materials' && (
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por nombre, SKU o categoría..."
+                  className="w-full rounded-xl border-2 border-border bg-card px-5 py-3 pl-11 text-base outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <Button onClick={exportMaterials} className="gap-2 rounded-xl border-2 border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20 px-5 py-3 h-auto">
+                <Download className="h-4 w-4" /> Exportar CSV
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total', value: stats.materials.total, color: 'text-foreground' },
+                { label: 'Disponibles', value: stats.materials.available, color: 'text-green-400' },
+                { label: 'En uso', value: stats.materials.inUse, color: 'text-violet-400' },
+                { label: 'Stock bajo', value: stats.materials.lowStock, color: 'text-amber-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="p-4 rounded-xl border-2 border-border/50 bg-card text-center">
+                  <p className={`text-3xl font-black ${color}`}>{value}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-base">Inventario — {filteredMaterials.length} material(es)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {['Nombre', 'SKU', 'Categoría', 'Stock', 'Disponible', 'Estado', 'Stock Bajo'].map(h => (
+                          <th key={h} className="pb-3 pr-4 text-left text-xs text-muted-foreground font-medium uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMaterials.length === 0 && (
+                        <tr><td colSpan={7} className="py-10 text-center text-muted-foreground">Sin materiales encontrados</td></tr>
+                      )}
+                      {filteredMaterials.map((m: any) => (
+                        <tr key={m.id} className="border-b border-border/40 hover:bg-secondary/10 transition-colors">
+                          <td className="py-3 pr-4 font-medium">{m.name}</td>
+                          <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{m.sku || 'N/A'}</td>
+                          <td className="py-3 pr-4 text-muted-foreground">{m.category_detail?.name || 'Sin categoría'}</td>
+                          <td className="py-3 pr-4 font-medium">{m.quantity}</td>
+                          <td className="py-3 pr-4 text-green-400 font-medium">{m.available_quantity}</td>
+                          <td className="py-3 pr-4">
+                            <Badge variant={m.status === 'available' ? 'success' : 'default'}>
+                              {STATUS_LABELS[m.status] || m.status}
+                            </Badge>
                           </td>
                           <td className="py-3">
-                            <Badge
-                              variant={
-                                material.is_low_stock
-                                  ? 'warning'
-                                  : material.status === 'available'
-                                  ? 'success'
-                                  : 'default'
-                              }
-                            >
-                              {material.is_low_stock
-                                ? 'Stock Bajo'
-                                : material.status === 'available'
-                                ? 'Disponible'
-                                : material.status}
-                            </Badge>
+                            {m.is_low_stock
+                              ? <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-medium"><AlertCircle className="h-3.5 w-3.5" /> Sí</span>
+                              : <span className="text-muted-foreground text-xs">No</span>}
                           </td>
                         </tr>
                       ))}
@@ -669,220 +688,82 @@ export default function ReportsPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Materials by Category Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Materiales por Categoría</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={stats.materials.byCategory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="name" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                    <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </>
+          </div>
         )}
 
-        {/* Loans Report */}
-        {selectedReport === 'loans' && (
-          <>
-            {/* Search and Filters */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Buscar préstamos por material o usuario..."
-                      value={searchTerm}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Button variant="secondary">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Rango de Fechas
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Loans Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Historial de Préstamos ({filteredLoans.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="border-b border-border">
-                      <tr className="text-left">
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">ID</th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Material
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Solicitante
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Cantidad
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Fecha Préstamo
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Fecha Retorno
-                        </th>
-                        <th className="pb-3 text-sm font-medium text-muted-foreground">
-                          Estado
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLoans.slice(0, 20).map((loan: any) => (
-                        <tr key={loan.id} className="border-b border-border last:border-0">
-                          <td className="py-3 text-sm font-medium text-foreground">
-                            #{loan.id}
-                          </td>
-                          <td className="py-3 text-sm text-foreground">
-                            {loan.material_detail?.name || 'N/A'}
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {loan.borrower_detail?.full_name || 'N/A'}
-                          </td>
-                          <td className="py-3 text-sm text-foreground">
-                            {loan.quantity_loaned}
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {new Date(loan.issued_at || loan.created_at).toLocaleDateString(
-                              'es-ES'
-                            )}
-                          </td>
-                          <td className="py-3 text-sm text-muted-foreground">
-                            {loan.expected_return_date
-                              ? new Date(loan.expected_return_date).toLocaleDateString('es-ES')
-                              : 'N/A'}
-                          </td>
-                          <td className="py-3">
-                            <Badge
-                              variant={
-                                loan.status === 'active'
-                                  ? 'success'
-                                  : loan.status === 'overdue'
-                                  ? 'danger'
-                                  : loan.status === 'returned'
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {loan.status === 'active'
-                                ? 'Activo'
-                                : loan.status === 'overdue'
-                                ? 'Vencido'
-                                : loan.status === 'returned'
-                                ? 'Devuelto'
-                                : loan.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        {/* Users Report */}
-        {selectedReport === 'users' && (
-          <>
-            {/* User Stats */}
-            <div className="grid sm:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Total Usuarios
-                    </div>
-                    <Users className="h-8 w-8 text-primary" />
-                  </div>
-                  <div className="text-3xl font-bold text-foreground">{stats.users.total}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Inventaristas
-                    </div>
-                    <Users className="h-8 w-8 text-primary" />
-                  </div>
-                  <div className="text-3xl font-bold text-foreground">
-                    {stats.users.inventaristas}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm font-medium text-muted-foreground">Empleados</div>
-                    <Users className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div className="text-3xl font-bold text-foreground">
-                    {stats.users.empleados}
-                  </div>
-                </CardContent>
-              </Card>
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* TAB: AUDITORÍA                                                       */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'audit' && (
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por usuario, acción o detalle..."
+                  className="w-full rounded-xl border-2 border-border bg-card px-5 py-3 pl-11 text-base outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <Button onClick={exportAudit} className="gap-2 rounded-xl border-2 border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20 px-5 py-3 h-auto">
+                <Download className="h-4 w-4" /> Exportar CSV
+              </Button>
             </div>
 
-            {/* Most Active Users */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Usuarios Más Activos (Top 10)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={mostActiveBorrowers} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis type="number" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      stroke="#9ca3af"
-                      style={{ fontSize: '12px' }}
-                      width={150}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Bar dataKey="count" fill="#22c55e" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </>
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 rounded-xl border-2 border-violet-500/30 bg-violet-500/5">
+              <Shield className="h-5 w-5 text-violet-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-violet-300">Registro completo de auditoría</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Muestra todos los eventos: préstamos emitidos, devoluciones y solicitudes.
+                  {auditLog.length} evento(s) en el período seleccionado.
+                </p>
+              </div>
+            </div>
+
+            {auditLog.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 border-dashed border-2 border-border rounded-xl">
+                <Shield className="h-14 w-14 text-muted-foreground mb-4" />
+                <p className="text-xl font-semibold text-muted-foreground">Sin eventos en este período</p>
+                <p className="text-sm text-muted-foreground mt-1">Cambia el filtro de fechas para ver más historial</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditLog.map((event: any) => {
+                  const cfg = TYPE_ICONS[event.type] || TYPE_ICONS.request
+                  const Icon = cfg.icon
+                  return (
+                    <div key={event.id} className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-card hover:bg-secondary/10 transition-colors">
+                      <div className={`p-2.5 rounded-lg flex-shrink-0 ${cfg.bg}`}>
+                        <Icon className={`h-4 w-4 ${cfg.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-foreground">{event.action}</span>
+                          <Badge variant={getStatusVariant(event.status)} className="text-xs">
+                            {STATUS_LABELS[event.status] || event.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          <span className="font-medium text-foreground">{event.user}</span>
+                          {' · '}{event.detail}
+                        </p>
+                        {event.approvedBy && (
+                          <p className="text-xs text-muted-foreground mt-0.5">Revisado por: {event.approvedBy}</p>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <p className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(event.date)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         )}
+
       </div>
     </DashboardLayout>
   )

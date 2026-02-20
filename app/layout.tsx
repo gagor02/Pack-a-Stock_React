@@ -19,8 +19,24 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#1a1625', // Dark purple background
+  themeColor: '#1a1625',
 }
+
+// Script inline que aplica el tema ANTES de que React hidrate,
+// evitando el parpadeo de claro→oscuro en el primer render.
+const themeScript = `
+  try {
+    var stored = localStorage.getItem('ui-storage')
+    var theme = stored ? JSON.parse(stored).state?.theme : 'dark'
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  } catch(e) {
+    document.documentElement.classList.add('dark')
+  }
+`
 
 export default function RootLayout({
   children,
@@ -28,7 +44,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" className="dark" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Anti-FOUC: aplica el tema antes del primer render */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>
