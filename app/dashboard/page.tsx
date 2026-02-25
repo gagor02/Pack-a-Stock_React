@@ -87,7 +87,7 @@ export default function DashboardPage() {
     users: {
       total: users.length,
       inventaristas: users.filter((u: any) => u.user_type === 'inventarista').length,
-      empleados: users.filter((u: any) => u.user_type === 'empleado').length,
+      empleados: users.filter((u: any) => u.user_type === 'employee').length,
     },
     categories: categories.length,
     locations: locations.length,

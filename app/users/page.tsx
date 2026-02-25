@@ -33,7 +33,7 @@ interface UserItem {
   id: number
   email: string
   full_name?: string
-  user_type: 'inventarista' | 'empleado'
+  user_type: 'inventarista' | 'employee'
   is_active: boolean
 }
 
@@ -41,7 +41,7 @@ interface UserFormData {
   email: string
   full_name: string
   password: string
-  user_type: 'inventarista' | 'empleado'
+  user_type: 'inventarista' | 'employee'
   is_active: boolean
 }
 
@@ -58,7 +58,7 @@ export default function UsersPage() {
     email: '',
     full_name: '',
     password: '',
-    user_type: 'empleado',
+    user_type: 'employee',
     is_active: true,
   })
 
@@ -100,7 +100,7 @@ export default function UsersPage() {
   const stats = useMemo(() => ({
     total: users.length,
     admins: users.filter((u) => u.user_type === 'inventarista').length,
-    employees: users.filter((u) => u.user_type === 'empleado').length,
+    employees: users.filter((u) => u.user_type === 'employee').length,
     inactive: users.filter((u) => !u.is_active).length,
   }), [users])
 
@@ -173,8 +173,8 @@ export default function UsersPage() {
       email: '',
       full_name: '',
       password: '',
-      user_type: 'empleado',
-      is_active: true,
+      user_type: 'employee',
+  is_active: true,
     })
   }
 
@@ -392,7 +392,7 @@ export default function UsersPage() {
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, user_type: e.target.value as UserFormData['user_type'] })}
                     >
                       <option value="inventarista">Inventarista</option>
-                      <option value="empleado">Empleado</option>
+                      <option value="employee">Empleado</option>
                     </Input>
                   </div>
 

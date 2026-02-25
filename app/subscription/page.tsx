@@ -118,10 +118,9 @@ export default function SubscriptionPage() {
         {/* Current Plan Status */}
         {!loadingStatus && subscriptionStatus && (
           <Card className="border-2 border-primary/30 bg-primary/5">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
+            <CardContent className="py-5 px-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-xl">
+                  <div className="p-3.5 bg-primary/10 rounded-xl">
                     {isFreemium ? (
                       <Shield className="h-6 w-6 text-primary" />
                     ) : (
@@ -195,15 +194,15 @@ export default function SubscriptionPage() {
                   }`}
                 >
                   {isPopular && (
-                    <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl">
+                    <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-bold px-4 py-1.5 rounded-bl-xl tracking-wider">
                       POPULAR
                     </div>
                   )}
-                  <CardContent className="p-6 flex flex-col h-full">
+                  <CardContent className="px-6 pt-10 pb-6 flex flex-col h-full">
                     {/* Plan Header */}
                     <div className="text-center mb-6">
-                      <div className={`p-3 ${colors.bg} rounded-xl w-fit mx-auto mb-4`}>
-                        <PlanIcon className={`h-8 w-8 ${colors.text}`} />
+                      <div className={`p-4 ${colors.bg} rounded-2xl w-fit mx-auto mb-4`}>
+                        <PlanIcon className={`h-9 w-9 ${colors.text}`} />
                       </div>
                       <h3 className="text-xl font-bold text-foreground">{plan.display_name}</h3>
                       <div className="mt-3">
