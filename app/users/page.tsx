@@ -26,6 +26,8 @@ import {
   X,
   Package,
   Clock,
+  Lock,
+  Unlock,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -35,6 +37,9 @@ interface UserItem {
   full_name?: string
   user_type: 'inventarista' | 'employee'
   is_active: boolean
+  is_blocked?: boolean
+  blocked_reason?: string
+  blocked_until?: string | null
 }
 
 interface UserFormData {
@@ -45,6 +50,14 @@ interface UserFormData {
   is_active: boolean
 }
 
+interface BlockFormData {
+  days: number
+  customDays: string
+  reason: string
+}
+
+const DAY_PRESETS = [1, 3, 7, 15, 30]
+
 export default function UsersPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -54,6 +67,8 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string; activeLoans: number; pendingRequests: number; loanMaterials: string[] } | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [blockModal, setBlockModal] = useState<{ id: number; name: string } | null>(null)
+  const [blockForm, setBlockForm] = useState<BlockFormData>({ days: 7, customDays: '', reason: '' })
   const [formData, setFormData] = useState<UserFormData>({
     email: '',
     full_name: '',
@@ -102,6 +117,7 @@ export default function UsersPage() {
     admins: users.filter((u) => u.user_type === 'inventarista').length,
     employees: users.filter((u) => u.user_type === 'employee').length,
     inactive: users.filter((u) => !u.is_active).length,
+    blocked: users.filter((u) => u.is_blocked).length,
   }), [users])
 
   const filteredUsers = users.filter((user: UserItem) =>
@@ -168,13 +184,52 @@ export default function UsersPage() {
     },
   })
 
+  const blockMutation = useMutation({
+    mutationFn: async ({ id, days, reason }: { id: number; days: number; reason: string }) => {
+      const blocked_until = new Date()
+      blocked_until.setDate(blocked_until.getDate() + days)
+      const response = await api.put(`/auth/users/${id}/block/`, {
+        is_blocked: true,
+        blocked_reason: reason,
+        blocked_until: blocked_until.toISOString(),
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('Usuario penalizado')
+      setBlockModal(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.response?.data?.error || 'Error al penalizar usuario')
+    },
+  })
+
+  const unblockMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.put(`/auth/users/${id}/block/`, {
+        is_blocked: false,
+        blocked_reason: '',
+        blocked_until: null,
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('Penalización removida')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.response?.data?.error || 'Error al desbloquear usuario')
+    },
+  })
+
   const resetForm = () => {
     setFormData({
       email: '',
       full_name: '',
       password: '',
       user_type: 'employee',
-  is_active: true,
+      is_active: true,
     })
   }
 
@@ -224,6 +279,18 @@ export default function UsersPage() {
     }
   }
 
+  const handleOpenBlockModal = (user: UserItem) => {
+    setBlockForm({ days: 7, customDays: '', reason: '' })
+    setBlockModal({ id: user.id, name: user.full_name || user.email })
+  }
+
+  const confirmBlock = () => {
+    if (!blockModal) return
+    const days = blockForm.customDays ? parseInt(blockForm.customDays) : blockForm.days
+    if (!days || days < 1 || !blockForm.reason.trim()) return
+    blockMutation.mutate({ id: blockModal.id, days, reason: blockForm.reason })
+  }
+
   const handleCancel = () => {
     resetForm()
     setEditingId(null)
@@ -235,6 +302,7 @@ export default function UsersPage() {
     { label: 'Administradores', value: stats.admins, icon: Shield, color: 'text-blue-400', bg: 'bg-blue-500/20' },
     { label: 'Empleados', value: stats.employees, icon: User, color: 'text-green-400', bg: 'bg-green-500/20' },
     { label: 'Inactivos', value: stats.inactive, icon: UserX, color: 'text-red-400', bg: 'bg-red-500/20' },
+    { label: 'Penalizados', value: stats.blocked, icon: Lock, color: 'text-orange-400', bg: 'bg-orange-500/20' },
   ]
 
   return (
@@ -294,7 +362,7 @@ export default function UsersPage() {
 
         {/* Stats Cards */}
         {!showForm && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {statCards.map(({ label, value, icon: Icon, color, bg }) => (
               <div
                 key={label}
@@ -470,20 +538,27 @@ export default function UsersPage() {
             {filteredUsers.map((user: UserItem) => {
               const isAdmin = user.user_type === 'inventarista'
               const isCurrentUser = currentUser?.id === user.id
+              const isBlocked = user.is_blocked === true
+              const blockedUntil = user.blocked_until ? new Date(user.blocked_until) : null
+              const daysLeft = blockedUntil
+                ? Math.max(0, Math.ceil((blockedUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                : 0
               return (
                 <Card
                   key={user.id}
-                  className={`border-l-4 ${isAdmin ? 'border-l-blue-500' : 'border-l-green-500'} ${!user.is_active ? 'opacity-60' : ''} hover:shadow-xl transition-all duration-300 overflow-hidden`}
+                  className={`border-l-4 ${isBlocked ? 'border-l-orange-500' : isAdmin ? 'border-l-blue-500' : 'border-l-green-500'} ${!user.is_active ? 'opacity-60' : ''} hover:shadow-xl transition-all duration-300 overflow-hidden`}
                 >
                   <CardContent className="p-0">
                     <div className="flex flex-col gap-4 p-5">
-                      {/* Left: User Info */}
+                      {/* User Info */}
                       <div className="flex-1 min-w-0">
                         {/* Name + Badges */}
                         <div className="flex items-center gap-3 mb-4">
-                          <div className={`p-2.5 rounded-xl ${isAdmin ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
-                            {isAdmin ? (
-                              <Shield className={`h-6 w-6 ${isAdmin ? 'text-blue-400' : 'text-green-400'}`} />
+                          <div className={`p-2.5 rounded-xl ${isBlocked ? 'bg-orange-500/10' : isAdmin ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
+                            {isBlocked ? (
+                              <Lock className="h-6 w-6 text-orange-400" />
+                            ) : isAdmin ? (
+                              <Shield className="h-6 w-6 text-blue-400" />
                             ) : (
                               <User className="h-6 w-6 text-green-400" />
                             )}
@@ -493,7 +568,7 @@ export default function UsersPage() {
                               {user.full_name || user.email}
                             </h3>
                           </div>
-                          <div className="flex gap-2 ml-auto lg:ml-0">
+                          <div className="flex gap-2 ml-auto lg:ml-0 flex-wrap">
                             <Badge
                               variant={isAdmin ? 'default' : 'secondary'}
                               className="text-sm px-3 py-1"
@@ -503,6 +578,11 @@ export default function UsersPage() {
                             {!user.is_active && (
                               <Badge variant="danger" className="text-sm px-3 py-1">
                                 Inactivo
+                              </Badge>
+                            )}
+                            {isBlocked && (
+                              <Badge className="text-sm px-3 py-1 bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                                Penalizado
                               </Badge>
                             )}
                             {isCurrentUser && (
@@ -536,11 +616,30 @@ export default function UsersPage() {
                             </div>
                           </div>
                         </div>
+
+                        {/* Penalty Info */}
+                        {isBlocked && (
+                          <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-xl flex items-start gap-3">
+                            <Lock className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-orange-300">
+                                {user.blocked_reason || 'Sin motivo especificado'}
+                              </p>
+                              {blockedUntil && (
+                                <p className="text-xs text-orange-400/70 mt-0.5">
+                                  {daysLeft > 0
+                                    ? `Termina en ${daysLeft} día${daysLeft !== 1 ? 's' : ''} · ${blockedUntil.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                    : 'Expirada — pendiente de revisión'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}
                       {!isCurrentUser && (
-                        <div className="grid grid-cols-2 gap-3 w-full pt-2 border-t border-border/30 mt-2">
+                        <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-3'} gap-3 w-full pt-2 border-t border-border/30 mt-2`}>
                           <Button
                             onClick={() => handleEdit(user)}
                             variant="secondary"
@@ -550,6 +649,28 @@ export default function UsersPage() {
                             <Edit2 className="h-5 w-5 mr-2" />
                             Editar
                           </Button>
+                          {!isAdmin && (
+                            isBlocked ? (
+                              <Button
+                                onClick={() => unblockMutation.mutate(user.id)}
+                                disabled={unblockMutation.isPending}
+                                size="lg"
+                                className="w-full text-base py-3 bg-green-600 hover:bg-green-700 text-white border-0"
+                              >
+                                <Unlock className="h-5 w-5 mr-2" />
+                                Desbloquear
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handleOpenBlockModal(user)}
+                                size="lg"
+                                className="w-full text-base py-3 bg-orange-600 hover:bg-orange-700 text-white border-0"
+                              >
+                                <Lock className="h-5 w-5 mr-2" />
+                                Penalizar
+                              </Button>
+                            )
+                          )}
                           <Button
                             onClick={() => handleDelete(user)}
                             disabled={deleteLoading}
@@ -569,6 +690,7 @@ export default function UsersPage() {
             })}
           </div>
         )}
+
         {/* Delete Confirmation Modal */}
         {deleteConfirm && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -639,6 +761,107 @@ export default function UsersPage() {
                   >
                     <Trash2 className="h-5 w-5 mr-2" />
                     Eliminar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Block / Penalize Modal */}
+        {blockModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md border-2 shadow-2xl">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-xl flex items-center gap-3">
+                    <div className="p-2 bg-orange-500/10 rounded-xl">
+                      <Lock className="h-6 w-6 text-orange-400" />
+                    </div>
+                    Penalizar Usuario
+                  </CardTitle>
+                  <button onClick={() => setBlockModal(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <p className="text-base text-foreground">
+                  Penalizar a <strong>{blockModal.name}</strong>. No podrá crear solicitudes durante la penalización.
+                </p>
+
+                {/* Duration presets */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-3 uppercase tracking-wider">
+                    Duración
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {DAY_PRESETS.map((d) => {
+                      const isSelected = !blockForm.customDays && blockForm.days === d
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setBlockForm(prev => ({ ...prev, days: d, customDays: '' }))}
+                          className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-500/20 text-orange-300'
+                              : 'border-border bg-secondary/20 text-muted-foreground hover:border-orange-500/50'
+                          }`}
+                        >
+                          {d} día{d !== 1 ? 's' : ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <Input
+                    type="number"
+                    placeholder="Otro número de días..."
+                    value={blockForm.customDays}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setBlockForm(prev => ({ ...prev, customDays: e.target.value, days: parseInt(e.target.value) || 0 }))
+                    }
+                    min={1}
+                  />
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wider">
+                    Motivo *
+                  </label>
+                  <textarea
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors resize-none"
+                    placeholder="Ej: Préstamo no devuelto a tiempo..."
+                    rows={3}
+                    value={blockForm.reason}
+                    onChange={(e) => setBlockForm(prev => ({ ...prev, reason: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => setBlockModal(null)}
+                    variant="secondary"
+                    size="lg"
+                    className="text-base py-3"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={confirmBlock}
+                    disabled={
+                      blockMutation.isPending ||
+                      !blockForm.reason.trim() ||
+                      (blockForm.customDays ? parseInt(blockForm.customDays) < 1 : blockForm.days < 1)
+                    }
+                    size="lg"
+                    className="text-base py-3 bg-orange-600 hover:bg-orange-700 text-white border-0"
+                  >
+                    <Lock className="h-5 w-5 mr-2" />
+                    {blockMutation.isPending ? 'Penalizando...' : 'Penalizar'}
                   </Button>
                 </div>
               </CardContent>

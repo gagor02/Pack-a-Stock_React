@@ -29,7 +29,9 @@ import {
   ImagePlus,
   MapPinPlus,
   ArrowRight,
+  ScanFace,
 } from 'lucide-react'
+import BiometricEnrollmentModal from '@/components/biometrics/BiometricEnrollmentModal'
 
 interface AccountForm {
   id: number
@@ -58,6 +60,7 @@ export default function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [logoHistory, setLogoHistory] = useState<string[]>([])
   const [showWelcome, setShowWelcome] = useState(false)
+  const [showEnrollModal, setShowEnrollModal] = useState(false)
 
   // Detect new account for welcome banner
   useEffect(() => {
@@ -113,6 +116,15 @@ export default function SettingsPage() {
     },
     retry: 1,
     staleTime: 30000,
+  })
+
+  const { data: biometricStatus } = useQuery<{ enrolled: boolean; enrolled_at: string | null }>({
+    queryKey: ['biometric-status'],
+    queryFn: async () => {
+      const { data } = await api.get('/auth/biometrics/status/')
+      return data
+    },
+    staleTime: 60_000,
   })
 
   const accounts = Array.isArray(accountsResponse)
@@ -457,6 +469,53 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
+            {/* Biometric Verification Card */}
+            <Card className={biometricStatus?.enrolled ? 'border-green-500/30' : 'border-amber-500/30'}>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <ScanFace className={`h-5 w-5 ${biometricStatus?.enrolled ? 'text-green-400' : 'text-amber-400'}`} />
+                  <CardTitle className="text-sm">Verificación Biométrica</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-xl ${
+                  biometricStatus?.enrolled
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  {biometricStatus?.enrolled ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                      <span className="font-medium">Rostro registrado</span>
+                    </>
+                  ) : (
+                    <>
+                      <ScanFace className="h-4 w-4 flex-shrink-0" />
+                      <span className="font-medium">No registrado</span>
+                    </>
+                  )}
+                </div>
+                {biometricStatus?.enrolled_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Registrado el{' '}
+                    {new Date(biometricStatus.enrolled_at).toLocaleDateString('es', {
+                      day: '2-digit', month: 'long', year: 'numeric',
+                    })}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Requerido al emitir o entregar préstamos con más de 3 materiales no consumibles.
+                </p>
+                <button
+                  onClick={() => setShowEnrollModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-xl transition-colors"
+                >
+                  <Camera className="h-4 w-4" />
+                  {biometricStatus?.enrolled ? 'Actualizar rostro' : 'Registrar rostro'}
+                </button>
+              </CardContent>
+            </Card>
+
             {/* Logo History */}
             {logoHistory.length > 0 && (
               <Card>
@@ -719,6 +778,11 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <BiometricEnrollmentModal
+        isOpen={showEnrollModal}
+        onClose={() => setShowEnrollModal(false)}
+      />
     </DashboardLayout>
   )
 }

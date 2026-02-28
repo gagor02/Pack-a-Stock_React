@@ -38,6 +38,9 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
+import BiometricVerificationModal from '@/components/biometrics/BiometricVerificationModal'
+import { requiresBiometricVerification } from '@/lib/biometrics'
 
 type TabKey = 'activos' | 'devoluciones' | 'historial'
 
@@ -72,6 +75,11 @@ interface QRShowModalState {
   qrToken: string
   title: string
   subtitle: string
+}
+
+interface RequestDetailModal {
+  isOpen: boolean
+  request: any | null
 }
 
 export default function LoansPage() {
@@ -109,10 +117,24 @@ export default function LoansPage() {
     title: '',
     subtitle: '',
   })
+  const [requestDetailModal, setRequestDetailModal] = useState<RequestDetailModal>({
+    isOpen: false,
+    request: null,
+  })
+  const [biometricModal, setBiometricModal] = useState<{ open: boolean; pendingRequest: any | null }>({
+    open: false,
+    pendingRequest: null,
+  })
   const scannerRef = useRef<any>(null)
   const scannerContainerRef = useRef<HTMLDivElement>(null)
 
   // Queries
+  const { data: biometricStatus } = useQuery<{ enrolled: boolean }>({
+    queryKey: ['biometric-status'],
+    queryFn: async () => { const { data } = await api.get('/auth/biometrics/status/'); return data },
+    staleTime: 60_000,
+    enabled: isInventarista,
+  })
   const { data: myRequestsData } = useMyRequests()
   const { data: allRequestsData } = useLoanRequests()
   const { data: myLoansData, isLoading: loadingMyLoans } = useMyLoans()
@@ -225,6 +247,22 @@ export default function LoansPage() {
     }
   }
 
+  const handleDeliverFromQR = (request: any) => {
+    const items = request.items || []
+    if (items.length === 0) { toast.error('Esta solicitud no tiene materiales'); return }
+
+    if (requiresBiometricVerification(items)) {
+      if (!biometricStatus?.enrolled) {
+        toast.error('Debes registrar tu rostro en Configuración → Verificación Biométrica')
+        return
+      }
+      setBiometricModal({ open: true, pendingRequest: request })
+      return
+    }
+
+    executeDeliverFromQR(request)
+  }
+
   // QR Scanner
   const searchByToken = async (token: string) => {
     if (!token.trim()) return
@@ -306,13 +344,8 @@ export default function LoansPage() {
   }
 
   // Crear préstamos a partir de una solicitud aprobada (entrega de materiales)
-  const handleDeliverFromQR = async (request: any) => {
+  const executeDeliverFromQR = async (request: any) => {
     const items = request.items || []
-    if (items.length === 0) {
-      toast.error('Esta solicitud no tiene materiales')
-      return
-    }
-
     setQrModal((prev) => ({ ...prev, isSearching: true }))
 
     try {
@@ -326,6 +359,8 @@ export default function LoansPage() {
         })
       )
       await Promise.all(loanPromises)
+      // Marcar la solicitud como completada para evitar entregas duplicadas
+      await api.patch(`/loans/loan-requests/${request.id}/`, { status: 'completed' })
       toast.success(`${items.length} prestamo(s) creado(s) exitosamente`)
       handleCloseQRModal()
     } catch (error: any) {
@@ -718,7 +753,11 @@ export default function LoansPage() {
                       const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
                       const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
                       return (
-                        <Card key={`req-h-${req.id}`} className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
+                        <Card
+                          key={`req-h-${req.id}`}
+                          className={`border-l-4 ${getStatusColor(req.status)} hover:shadow-lg transition-all duration-300 overflow-hidden cursor-pointer`}
+                          onClick={() => setRequestDetailModal({ isOpen: true, request: req })}
+                        >
                           <CardContent className="p-0">
                             <div className="flex flex-col gap-3 p-5">
                               <div className="flex items-center gap-3">
@@ -1044,16 +1083,24 @@ export default function LoansPage() {
                       </div>
                     </div>
                     {qrModal.result.status === 'approved' && (
-                      <Button
-                        onClick={() => handleDeliverFromQR(qrModal.result)}
-                        disabled={qrModal.isSearching}
-                        variant="primary"
-                        size="lg"
-                        className="w-full text-base py-3"
-                      >
-                        <Package className="h-5 w-5 mr-2" />
-                        {qrModal.isSearching ? 'Creando prestamos...' : 'Entregar Materiales'}
-                      </Button>
+                      <div className="space-y-2">
+                        {requiresBiometricVerification(qrModal.result.items || []) && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs">
+                            <span>🔒</span>
+                            <span>Verificación facial requerida — más de 3 materiales no consumibles</span>
+                          </div>
+                        )}
+                        <Button
+                          onClick={() => handleDeliverFromQR(qrModal.result)}
+                          disabled={qrModal.isSearching}
+                          variant="primary"
+                          size="lg"
+                          className="w-full text-base py-3"
+                        >
+                          <Package className="h-5 w-5 mr-2" />
+                          {qrModal.isSearching ? 'Creando prestamos...' : 'Entregar Materiales'}
+                        </Button>
+                      </div>
                     )}
                     {(qrModal.result.status === 'completed' || qrModal.result.status === 'rejected') && (
                       <div className="p-3 bg-secondary/20 rounded-xl text-center">
@@ -1129,6 +1176,129 @@ export default function LoansPage() {
           </div>
         )}
 
+        {/* Request Detail Modal */}
+        {requestDetailModal.isOpen && requestDetailModal.request && (() => {
+          const req = requestDetailModal.request
+          const items = req.items || []
+          const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+          const statusColors: Record<string, string> = {
+            approved: 'text-green-400 bg-green-500/10 border-green-500/20',
+            rejected: 'text-red-400 bg-red-500/10 border-red-500/20',
+            completed: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+            cancelled: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+            pending: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+          }
+          const sc = statusColors[req.status] || 'text-muted-foreground bg-secondary/20 border-border'
+          return (
+            <div
+              className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+              onClick={() => setRequestDetailModal({ isOpen: false, request: null })}
+            >
+              <Card
+                className="w-full max-w-lg border-2 shadow-2xl max-h-[90vh] overflow-y-auto"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              >
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Inbox className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-base font-bold">Solicitud #{req.id}</p>
+                        <p className="text-xs text-muted-foreground font-normal">{req.requester_detail?.full_name || 'N/D'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full border ${sc}`}>
+                        {getStatusLabel(req.status)}
+                      </span>
+                      <button
+                        onClick={() => setRequestDetailModal({ isOpen: false, request: null })}
+                        className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <XCircle className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-secondary/20 rounded-xl">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Solicitada</p>
+                      <p className="text-sm font-medium text-foreground">{fmt(req.requested_date || req.created_at)}</p>
+                    </div>
+                    <div className="p-3 bg-secondary/20 rounded-xl">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Retiro est.</p>
+                      <p className="text-sm font-medium text-foreground">{fmt(req.desired_pickup_date)}</p>
+                    </div>
+                    {req.desired_return_date && (
+                      <div className="p-3 bg-secondary/20 rounded-xl col-span-2">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Devolución est.</p>
+                        <p className="text-sm font-medium text-foreground">{fmt(req.desired_return_date)}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {req.purpose && (
+                    <div className="p-3 bg-secondary/20 rounded-xl">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Propósito</p>
+                      <p className="text-sm text-foreground">{req.purpose}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wider mb-3">Materiales solicitados</p>
+                    <div className="space-y-2">
+                      {items.map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
+                          <div className="p-1.5 bg-primary/10 rounded-lg flex-shrink-0">
+                            <Package className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="text-sm text-foreground flex-1 truncate">
+                            {item.material_detail?.name || `Material #${item.material}`}
+                          </span>
+                          <span className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-lg">
+                            ×{item.quantity_requested || item.quantity || 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {req.review_notes && (
+                    <div className={`p-4 rounded-xl border-2 ${req.status === 'rejected' ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${req.status === 'rejected' ? 'text-red-400' : 'text-blue-400'}`}>
+                        Notas del administrador
+                      </p>
+                      <p className="text-sm text-foreground">{req.review_notes}</p>
+                    </div>
+                  )}
+
+                  {req.status === 'approved' && req.qr_token && (
+                    <div className="flex flex-col items-center gap-3 p-4 bg-secondary/10 rounded-xl border-2 border-border">
+                      <p className="text-xs font-bold text-green-400 uppercase tracking-wider">Código QR para recoger</p>
+                      <div className="p-3 bg-white rounded-xl shadow-lg">
+                        <QRCodeSVG value={req.qr_token} size={160} level="H" includeMargin />
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">Presenta este código al recoger los materiales</p>
+                    </div>
+                  )}
+
+                  <Button
+                    variant="secondary"
+                    onClick={() => setRequestDetailModal({ isOpen: false, request: null })}
+                    size="lg"
+                    className="w-full text-base py-3"
+                  >
+                    Cerrar
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )
+        })()}
+
         {/* QR Show Modal */}
         {qrShowModal.isOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -1172,6 +1342,24 @@ export default function LoansPage() {
           </div>
         )}
       </div>
+
+      {/* Biometric Verification Modal — triggered before material delivery */}
+      {biometricModal.pendingRequest && (
+        <BiometricVerificationModal
+          isOpen={biometricModal.open}
+          nonConsumableCount={
+            (biometricModal.pendingRequest.items || []).filter(
+              (i: any) => i.material_detail?.is_consumable === false
+            ).length
+          }
+          onVerified={() => {
+            const req = biometricModal.pendingRequest
+            setBiometricModal({ open: false, pendingRequest: null })
+            executeDeliverFromQR(req)
+          }}
+          onClose={() => setBiometricModal({ open: false, pendingRequest: null })}
+        />
+      )}
     </DashboardLayout>
   )
 }

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui'
 import {
   BarChart3, Download, FileText, Package, ArrowLeftRight, Users,
   Calendar, Search, AlertCircle, CheckCircle,
-  Activity, Star, Shield,
+  Activity, Star, Shield, Trash2, MapPin, Tag,
 } from 'lucide-react'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -35,7 +35,7 @@ function exportToCSV(rows: (string | number | null | undefined)[][], filename: s
   URL.revokeObjectURL(url)
 }
 
-type Tab = 'overview' | 'loans' | 'materials' | 'audit'
+type Tab = 'overview' | 'loans' | 'materials' | 'audit' | 'deleted'
 type DateFilter = 'week' | 'month' | 'all'
 
 function formatDate(d: string | null | undefined) {
@@ -78,12 +78,16 @@ export default function ReportsPage() {
   const { data: catRes } = useQuery({
     queryKey: ['categories'], queryFn: async () => (await api.get('/materials/categories/')).data, staleTime: 30000,
   })
+  const { data: auditRes } = useQuery({
+    queryKey: ['audit-logs'], queryFn: async () => (await api.get('/audit/logs/?action=delete&ordering=-created_at')).data, staleTime: 30000,
+  })
 
   const materials = Array.isArray(matRes) ? matRes : matRes?.results ?? []
   const loans = Array.isArray(loansRes) ? loansRes : loansRes?.results ?? []
   const requests = Array.isArray(reqRes) ? reqRes : reqRes?.results ?? []
   const users = Array.isArray(usersRes) ? usersRes : usersRes?.results ?? []
   const categories = Array.isArray(catRes) ? catRes : catRes?.results ?? []
+  const deletionLogs: any[] = Array.isArray(auditRes) ? auditRes : auditRes?.results ?? []
 
   const isLoading = matLoading || loansLoading || reqLoading || usersLoading
 
@@ -117,7 +121,8 @@ export default function ReportsPage() {
     materials.filter((m: any) => {
       if (!search) return true
       const s = search.toLowerCase()
-      return m.name?.toLowerCase().includes(s) || m.sku?.toLowerCase().includes(s) || m.category_detail?.name?.toLowerCase().includes(s)
+      const catName = m.category?.name || ''
+      return m.name?.toLowerCase().includes(s) || m.sku?.toLowerCase().includes(s) || catName.toLowerCase().includes(s)
     }), [materials, search])
 
   // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -263,7 +268,7 @@ export default function ReportsPage() {
   const exportMaterials = () => {
     const headers = ['ID', 'Nombre', 'SKU', 'Categoría', 'Stock Total', 'Disponible', 'Estado', 'Stock Bajo']
     const rows = filteredMaterials.map((m: any) => [
-      m.id, m.name, m.sku || 'N/A', m.category_detail?.name || 'Sin categoría',
+      m.id, m.name, m.sku || 'N/A', m.category?.name || 'Sin categoría',
       m.quantity, m.available_quantity,
       STATUS_LABELS[m.status] || m.status, m.is_low_stock ? 'Sí' : 'No',
     ])
@@ -285,6 +290,7 @@ export default function ReportsPage() {
     { id: 'loans', label: 'Préstamos', icon: ArrowLeftRight, count: stats.loans.total },
     { id: 'materials', label: 'Materiales', icon: Package, count: filteredMaterials.length },
     { id: 'audit', label: 'Auditoría', icon: Shield, count: auditLog.length },
+    { id: 'deleted', label: 'Eliminados', icon: Trash2, count: deletionLogs.length },
   ]
 
   const DATE_FILTERS: { id: DateFilter; label: string }[] = [
@@ -668,7 +674,7 @@ export default function ReportsPage() {
                         <tr key={m.id} className="border-b border-border/40 hover:bg-secondary/10 transition-colors">
                           <td className="py-3 pr-4 font-medium">{m.name}</td>
                           <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{m.sku || 'N/A'}</td>
-                          <td className="py-3 pr-4 text-muted-foreground">{m.category_detail?.name || 'Sin categoría'}</td>
+                          <td className="py-3 pr-4 text-muted-foreground">{m.category?.name || 'Sin categoría'}</td>
                           <td className="py-3 pr-4 font-medium">{m.quantity}</td>
                           <td className="py-3 pr-4 text-green-400 font-medium">{m.available_quantity}</td>
                           <td className="py-3 pr-4">
@@ -723,7 +729,7 @@ export default function ReportsPage() {
             </div>
 
             {auditLog.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 border-dashed border-2 border-border rounded-xl">
+              <div className="flex flex-col items-center justify-center py-16 border-dashed border-2 border-border rounded-xl">
                 <Shield className="h-14 w-14 text-muted-foreground mb-4" />
                 <p className="text-xl font-semibold text-muted-foreground">Sin eventos en este período</p>
                 <p className="text-sm text-muted-foreground mt-1">Cambia el filtro de fechas para ver más historial</p>
@@ -756,6 +762,117 @@ export default function ReportsPage() {
                       <div className="flex-shrink-0 text-right">
                         <p className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(event.date)}</p>
                       </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* TAB: ELIMINADOS                                                      */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'deleted' && (
+          <div className="space-y-5">
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 rounded-xl border-2 border-red-500/30 bg-red-500/5">
+              <Trash2 className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-400">Historial permanente de eliminaciones</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Materiales, categorías y ubicaciones eliminadas con su snapshot completo.
+                  Los préstamos del material quedan registrados aquí antes de borrarse.
+                </p>
+              </div>
+            </div>
+
+            {deletionLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 border-dashed border-2 border-border rounded-xl">
+                <Trash2 className="h-14 w-14 text-muted-foreground mb-4" />
+                <p className="text-xl font-semibold text-muted-foreground">Sin eliminaciones registradas</p>
+                <p className="text-sm text-muted-foreground mt-1">Los elementos eliminados aparecerán aquí</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {deletionLogs.map((log: any) => {
+                  const snap = log.changes?.snapshot || {}
+                  const loanHistory: any[] = snap.loan_history || []
+                  const tableIcon = log.table_name === 'material'
+                    ? { icon: Package, color: 'text-violet-400', bg: 'bg-violet-500/10' }
+                    : log.table_name === 'category'
+                      ? { icon: Tag, color: 'text-amber-400', bg: 'bg-amber-500/10' }
+                      : { icon: MapPin, color: 'text-blue-400', bg: 'bg-blue-500/10' }
+                  const Icon = tableIcon.icon
+                  return (
+                    <div key={log.id} className="rounded-xl border-2 border-red-500/20 bg-card overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-start gap-4 p-4 bg-red-500/5">
+                        <div className={`p-2.5 rounded-lg flex-shrink-0 ${tableIcon.bg}`}>
+                          <Icon className={`h-4 w-4 ${tableIcon.color}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="text-sm font-bold text-foreground">{snap.name || '—'}</span>
+                            <Badge variant="danger" className="text-xs">Eliminado</Badge>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">{log.table_label}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{log.description}</p>
+                          {/* Chips */}
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {snap.sku && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg font-mono text-muted-foreground">SKU: {snap.sku}</span>}
+                            {snap.category && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg text-muted-foreground">Cat: {snap.category}</span>}
+                            {snap.quantity !== undefined && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg text-muted-foreground">Stock: {snap.quantity}</span>}
+                            {snap.location && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg text-muted-foreground">Ubicación: {snap.location}</span>}
+                            {snap.materials_count !== undefined && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg text-muted-foreground">{snap.materials_count} material(es) afectado(s)</span>}
+                            {snap.full_address && <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-lg text-muted-foreground">{snap.full_address}</span>}
+                            {snap.total_loans !== undefined && (
+                              <span className="text-xs bg-violet-500/20 px-2 py-0.5 rounded-lg text-violet-400 font-medium">{snap.total_loans} préstamo(s) histórico(s)</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(log.created_at)}</p>
+                          <p className="text-xs text-red-400 mt-1 font-medium">{log.user_name}</p>
+                        </div>
+                      </div>
+
+                      {/* Loan history for deleted materials */}
+                      {loanHistory.length > 0 && (
+                        <div className="border-t border-border/50 px-4 py-3">
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <ArrowLeftRight className="h-3.5 w-3.5" /> Historial de préstamos ({loanHistory.length})
+                          </p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border/40">
+                                  {['ID', 'Usuario', 'Cant.', 'Fecha préstamo', 'Devuelto', 'Estado'].map(h => (
+                                    <th key={h} className="pb-2 pr-4 text-left text-muted-foreground font-medium uppercase tracking-wider">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {loanHistory.map((l: any) => (
+                                  <tr key={l.id} className="border-b border-border/30">
+                                    <td className="py-1.5 pr-4 text-primary font-medium">#{l.id}</td>
+                                    <td className="py-1.5 pr-4 text-foreground">{l.borrower}</td>
+                                    <td className="py-1.5 pr-4 text-muted-foreground">{l.quantity}</td>
+                                    <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{l.issued_at || '—'}</td>
+                                    <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{l.returned_at || '—'}</td>
+                                    <td className="py-1.5">
+                                      <Badge variant={l.status === 'returned' ? 'default' : l.status === 'active' ? 'success' : 'warning'} className="text-xs">
+                                        {STATUS_LABELS[l.status] || l.status}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })}

@@ -21,6 +21,7 @@ import {
   Moon,
   Sun,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react'
 
 const navigation = [
@@ -82,6 +83,12 @@ const navigation = [
     name: 'Suscripcion',
     href: '/subscription',
     icon: CreditCard,
+    roles: ['inventarista'],
+  },
+  {
+    name: 'Auditoría',
+    href: '/audit',
+    icon: ShieldCheck,
     roles: ['inventarista'],
   },
   {

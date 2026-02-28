@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { Card, Button, Input, Badge } from '@/components/ui'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -23,6 +23,8 @@ import {
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
 import jsQR from 'jsqr'
+import BiometricVerificationModal from '@/components/biometrics/BiometricVerificationModal'
+import { requiresBiometricVerification } from '@/lib/biometrics'
 
 interface Material {
   id: number
@@ -70,6 +72,16 @@ export default function NewLoanPage() {
   const [notes, setNotes] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [showBiometricModal, setShowBiometricModal] = useState(false)
+
+  const { data: biometricStatus } = useQuery<{ enrolled: boolean }>({
+    queryKey: ['biometric-status'],
+    queryFn: async () => {
+      const { data } = await api.get('/auth/biometrics/status/')
+      return data
+    },
+    staleTime: 60_000,
+  })
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -234,33 +246,12 @@ export default function NewLoanPage() {
     setSelectedMaterials(prev => prev.filter(m => m.id !== materialId))
   }
 
-  const handleCreateLoan = async () => {
-    if (!selectedUser) {
-      toast.error('Selecciona un usuario')
-      return
-    }
-
-    if (selectedMaterials.length === 0) {
-      toast.error('Agrega al menos un material')
-      return
-    }
-
-    if (!returnDate) {
-      toast.error('Selecciona una fecha de devolución')
-      return
-    }
-
-    if (new Date(returnDate) < new Date(today)) {
-      toast.error('La fecha de devolución no puede ser anterior a hoy')
-      return
-    }
-
+  const executeCreateLoan = async () => {
     setIsCreating(true)
     try {
-      // Backend expects one loan per material
       const loanPromises = selectedMaterials.map(m =>
         api.post('/loans/loans/', {
-          borrower: selectedUser.id,
+          borrower: selectedUser!.id,
           material: m.id,
           quantity_loaned: m.quantity,
           expected_return_date: returnDate,
@@ -269,20 +260,39 @@ export default function NewLoanPage() {
       )
 
       await Promise.all(loanPromises)
-      // Invalidate loans cache so the loans page shows the new loans
       queryClient.invalidateQueries({ queryKey: ['loans'] })
       queryClient.invalidateQueries({ queryKey: ['loan-requests'] })
       queryClient.invalidateQueries({ queryKey: ['materials'] })
       toast.success(`${selectedMaterials.length} préstamo(s) creado(s) exitosamente`)
       router.push('/loans')
     } catch (error: any) {
-      console.error('Error creating loan:', error)
       const detail = error.response?.data
       const msg = typeof detail === 'object' ? JSON.stringify(detail) : detail
       toast.error(msg || 'Error al crear el préstamo')
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleCreateLoan = () => {
+    if (!selectedUser) { toast.error('Selecciona un usuario'); return }
+    if (selectedMaterials.length === 0) { toast.error('Agrega al menos un material'); return }
+    if (!returnDate) { toast.error('Selecciona una fecha de devolución'); return }
+    if (new Date(returnDate) < new Date(today)) {
+      toast.error('La fecha de devolución no puede ser anterior a hoy'); return
+    }
+
+    const nonConsumableItems = selectedMaterials.map(m => ({ material_detail: { is_consumable: m.is_consumable }, quantity: m.quantity }))
+    if (requiresBiometricVerification(nonConsumableItems)) {
+      if (!biometricStatus?.enrolled) {
+        toast.error('Debes registrar tu rostro en Configuración → Verificación Biométrica')
+        return
+      }
+      setShowBiometricModal(true)
+      return
+    }
+
+    executeCreateLoan()
   }
 
   const filteredUsers = users.filter(u =>
@@ -603,6 +613,18 @@ export default function NewLoanPage() {
               </div>
             </Card>
 
+            {requiresBiometricVerification(
+              selectedMaterials.map(m => ({ material_detail: { is_consumable: m.is_consumable }, quantity: m.quantity }))
+            ) && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-sm">
+                <span className="text-base">🔒</span>
+                <span>
+                  <span className="font-medium">Verificación facial requerida</span>
+                  {' '}— 3 o más materiales no consumibles
+                </span>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <Button
                 variant="secondary"
@@ -623,6 +645,13 @@ export default function NewLoanPage() {
           </div>
         </div>
       </div>
+
+      <BiometricVerificationModal
+        isOpen={showBiometricModal}
+        nonConsumableCount={selectedMaterials.filter(m => !m.is_consumable).length}
+        onVerified={() => { setShowBiometricModal(false); executeCreateLoan() }}
+        onClose={() => setShowBiometricModal(false)}
+      />
     </DashboardLayout>
   )
 }

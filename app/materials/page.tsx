@@ -1308,7 +1308,9 @@ export default function MaterialsPage() {
                                   <p className="text-sm font-medium text-foreground">
                                     {loan.actual_return_date
                                       ? new Date(loan.actual_return_date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-                                      : new Date(loan.expected_return_date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                      : loan.expected_return_date
+                                        ? new Date(loan.expected_return_date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : 'N/D'
                                     }
                                   </p>
                                 </div>

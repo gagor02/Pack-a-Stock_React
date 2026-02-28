@@ -157,7 +157,6 @@ export default function SubscriptionPage() {
                     {isFreemium ? 'Gratuito' : 'Activo'}
                   </Badge>
                 </div>
-              </div>
             </CardContent>
           </Card>
         )}
