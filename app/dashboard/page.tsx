@@ -146,7 +146,7 @@ export default function DashboardPage() {
         date: r.created_at || r.request_date, status: r.status,
       })),
     ]
-    return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
+    return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3)
   }, [loans, requests])
 
   const alerts = [
@@ -184,15 +184,15 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-3 flex flex-col gap-2 h-full">
+      <div className="p-3 flex flex-col gap-2 h-screen overflow-hidden">
 
         {/* ── HERO ── */}
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/25 via-primary/10 to-background border border-primary/20 px-4 py-2.5">
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/25 via-primary/10 to-background border border-primary/20 px-6 py-7">
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
           <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Panel de control</p>
-              <h1 className="text-xl font-bold text-foreground leading-tight">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-1">Panel de control</p>
+              <h1 className="text-3xl font-bold text-foreground leading-tight">
                 Bienvenido, <span className="text-primary">{user?.full_name?.split(' ')[0] || 'Admin'}</span>
               </h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -222,18 +222,18 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary leading-none">{stats.loans.thisWeek}</p>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Préstamos<br />semana</p>
+                <p className="text-3xl font-bold text-primary leading-none">{stats.loans.thisWeek}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-tight mt-1">Préstamos<br />semana</p>
               </div>
-              <div className="w-px h-8 bg-border/40" />
+              <div className="w-px h-10 bg-border/40" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-amber-400 leading-none">{stats.requests.thisWeek}</p>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Solicitudes<br />semana</p>
+                <p className="text-3xl font-bold text-amber-400 leading-none">{stats.requests.thisWeek}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-tight mt-1">Solicitudes<br />semana</p>
               </div>
-              <div className="w-px h-8 bg-border/40" />
+              <div className="w-px h-10 bg-border/40" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-green-400 leading-none">{stats.loans.returned}</p>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Devueltos<br />total</p>
+                <p className="text-3xl font-bold text-green-400 leading-none">{stats.loans.returned}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-tight mt-1">Devueltos<br />total</p>
               </div>
             </div>
           </div>
@@ -288,15 +288,15 @@ export default function DashboardPage() {
             },
           ].map(({ icon: Icon, label, value, href, color, border, iconBg, d1, d2, d1Color, d2Color }) => (
             <Link key={label} href={href}>
-              <div className={`flex flex-col p-3 rounded-xl border-2 ${border} bg-card hover:bg-accent/20 transition-all cursor-pointer group h-full`}>
-                <div className="flex items-start justify-between mb-2">
-                  <div className={`p-2 rounded-lg ${iconBg}`}>
-                    <Icon className={`h-4 w-4 ${color}`} />
+              <div className={`flex flex-col p-5 rounded-xl border-2 ${border} bg-card hover:bg-accent/20 transition-all cursor-pointer group h-full`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`p-3 rounded-lg ${iconBg}`}>
+                    <Icon className={`h-5 w-5 ${color}`} />
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:translate-x-0.5 transition-transform mt-0.5" />
                 </div>
-                <p className={`text-3xl font-bold leading-none ${color}`}>{value}</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mt-1.5">{label}</p>
+                <p className={`text-5xl font-bold leading-none ${color}`}>{value}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mt-2.5">{label}</p>
                 <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2">
                   <span className={`text-[11px] font-medium ${d1Color}`}>{d1}</span>
                   <span className="text-muted-foreground/30">·</span>
@@ -308,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── CHART ROW: Área (8 cols) + Top Materiales (4 cols) ── */}
-        <div className="grid grid-cols-12 gap-2" style={{ height: '200px' }}>
+        <div className="grid grid-cols-12 gap-2" style={{ height: '245px' }}>
           <div className="col-span-8 bg-card border border-border/50 rounded-xl flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 border-b border-border/20">
               <p className="text-sm font-semibold text-foreground">Actividad — Últimos 14 días</p>
@@ -371,9 +371,9 @@ export default function DashboardPage() {
         </div>
 
         {/* ── BOTTOM ROW: Actividad Reciente (7) + Estado Materiales Pie (5) ── */}
-        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0" style={{ height: '240px' }}>
+        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
 
-          <div className="col-span-7 h-full bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col">
+          <div className="col-span-7 bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col h-full">
             <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-primary" />
@@ -406,50 +406,42 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Pie Chart: Estado de Materiales */}
-          <div className="col-span-5 h-full bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col">
+          {/* Estado de Materiales — barras horizontales */}
+          <div className="col-span-5 bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col h-full">
             <div className="flex items-center gap-2 px-4 py-2 border-b border-border/20 flex-shrink-0">
               <Package className="h-3.5 w-3.5 text-primary" />
               <p className="text-sm font-semibold text-foreground">Estado de Materiales</p>
             </div>
-            {materialStatusPie.length === 0 ? (
-              <p className="text-xs text-muted-foreground p-4 text-center">Sin datos</p>
-            ) : (
-              <div className="flex flex-1 min-h-0">
-                <div className="flex-1 min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={materialStatusPie} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
-                        {materialStatusPie.map((entry, index) => (
-                          <Cell key={index} fill={entry.color} strokeWidth={0} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={chart.tooltipStyle} formatter={(v: any, n: any) => [`${v} materiales`, n]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="w-36 flex flex-col justify-center pr-4 gap-2">
-                  {materialStatusPie.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                        <span className="text-[11px] text-muted-foreground">{item.name}</span>
+            <div className="flex flex-col justify-center flex-1 px-5 py-3 gap-3">
+              {[
+                { label: 'Disponibles', value: stats.materials.available, color: '#22c55e' },
+                { label: 'En Uso',      value: stats.materials.inUse,    color: '#8b5cf6' },
+                { label: 'Stock Bajo',  value: stats.materials.lowStock, color: '#f59e0b' },
+              ].map(({ label, value, color }) => {
+                const pct = stats.materials.total > 0 ? Math.round((value / stats.materials.total) * 100) : 0
+                return (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-muted-foreground">{label}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] font-semibold text-foreground">{item.value}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {stats.materials.total > 0 ? Math.round((item.value / stats.materials.total) * 100) : 0}%
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">{value}</span>
+                        <span className="text-[11px] text-muted-foreground w-8 text-right">{pct}%</span>
                       </div>
                     </div>
-                  ))}
-                  <div className="pt-1.5 border-t border-border/20 flex justify-between text-[11px]">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="font-bold text-foreground">{stats.materials.total}</span>
+                    <div className="h-2 bg-secondary/50 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    </div>
                   </div>
-                </div>
+                )
+              })}
+              <div className="pt-2 border-t border-border/20 flex justify-between text-xs">
+                <span className="text-muted-foreground">Total inventario</span>
+                <span className="font-bold text-foreground">{stats.materials.total}</span>
               </div>
-            )}
+            </div>
           </div>
 
         </div>

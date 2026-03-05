@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Sidebar />
       <main
         className={clsx(
-          'transition-all duration-300',
+          'transition-all duration-300 h-screen overflow-y-auto',
           sidebarCollapsed ? 'ml-16' : 'ml-64'
         )}
       >
