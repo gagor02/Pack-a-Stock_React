@@ -366,9 +366,9 @@ export default function RequestsPage() {
             </div>
             <div className="space-y-4">
               {pendingExtensions.map((ext) => (
-                <Card key={ext.id} className="border-l-4 border-l-orange-400 hover:shadow-xl transition-all duration-300">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col gap-4">
+                <Card key={ext.id} className="border-l-4 border-l-orange-400 hover:shadow-xl transition-all duration-300 overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="flex flex-col gap-4 p-5">
                       <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-xl bg-orange-500/10">
                           <CalendarClock className="h-6 w-6 text-orange-400" />
