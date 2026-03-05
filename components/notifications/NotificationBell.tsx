@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { Bell, X, CheckCheck, Inbox, AlertTriangle, Clock, Package, ChevronRight } from 'lucide-react'
+import { Bell, X, CheckCheck, Inbox, AlertTriangle, Clock, Package, CalendarClock, ChevronRight } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useNotifications, AppNotification, NotificationType } from '@/hooks/useNotifications'
 
@@ -17,6 +17,7 @@ const typeConfig: Record<NotificationType, { icon: any; color: string; bg: strin
   due_today: { icon: Clock, color: 'text-red-400', bg: 'bg-red-500/15' },
   due_soon: { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/15' },
   low_stock: { icon: Package, color: 'text-amber-400', bg: 'bg-amber-500/15' },
+  pending_extension: { icon: CalendarClock, color: 'text-orange-400', bg: 'bg-orange-500/15' },
 }
 
 function formatRelative(date: string) {

@@ -6,7 +6,7 @@ import { useNotificationStore } from '@/store/notificationStore'
 import { useAuthStore } from '@/store/authStore'
 import api from '@/lib/api'
 
-export type NotificationType = 'pending_request' | 'overdue_loan' | 'due_today' | 'due_soon' | 'low_stock'
+export type NotificationType = 'pending_request' | 'overdue_loan' | 'due_today' | 'due_soon' | 'low_stock' | 'pending_extension'
 
 export interface AppNotification {
   id: string
@@ -45,9 +45,18 @@ export function useNotifications() {
     enabled: isAuthenticated,
   })
 
+  const { data: extensionsResponse } = useQuery({
+    queryKey: ['loan-extensions-pending'],
+    queryFn: async () => (await api.get('/loans/loan-extensions/pending/')).data,
+    refetchInterval: 30000,
+    staleTime: 15000,
+    enabled: isAuthenticated,
+  })
+
   const requests = Array.isArray(requestsResponse) ? requestsResponse : requestsResponse?.results ?? []
   const loans = Array.isArray(loansResponse) ? loansResponse : loansResponse?.results ?? []
   const materials = Array.isArray(materialsResponse) ? materialsResponse : materialsResponse?.results ?? []
+  const pendingExtensions = Array.isArray(extensionsResponse) ? extensionsResponse : extensionsResponse?.results ?? []
 
   const notifications = useMemo((): AppNotification[] => {
     const result: AppNotification[] = []
@@ -131,6 +140,19 @@ export function useNotifications() {
         })
       })
 
+    // Extensiones pendientes (alta prioridad)
+    pendingExtensions.forEach((ext: any) => {
+      result.push({
+        id: `ext-${ext.id}`,
+        type: 'pending_extension',
+        title: 'Solicitud de extensión',
+        description: `${ext.requested_by_detail?.full_name || 'Usuario'} — ${ext.material_name || 'Material'}`,
+        href: '/requests',
+        priority: 'high',
+        date: ext.requested_at || new Date().toISOString(),
+      })
+    })
+
     // Stock bajo (media prioridad)
     materials
       .filter((m: any) => m.is_low_stock)
@@ -148,11 +170,11 @@ export function useNotifications() {
 
     // Sort by priority → date desc
     const order: Record<string, number> = { high: 0, medium: 1, low: 2 }
-    return result.sort((a, b) => {
+    return result.sort((a: AppNotification, b: AppNotification) => {
       if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority]
       return new Date(b.date).getTime() - new Date(a.date).getTime()
     })
-  }, [requests, loans, materials])
+  }, [requests, loans, materials, pendingExtensions])
 
   const { readIds, markRead, markAllRead } = useNotificationStore()
 

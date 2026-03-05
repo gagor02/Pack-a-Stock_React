@@ -167,8 +167,8 @@ export default function DashboardPage() {
     },
   ].filter(Boolean) as any[]
 
-  const getStatusLabel = (s: string) => ({ active: 'Activo', returned: 'Devuelto', overdue: 'Vencido', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' }[s] || s)
-  const getStatusVariant = (s: string): any => ({ approved: 'success', active: 'success', returned: 'default', pending: 'warning', rejected: 'danger', overdue: 'danger' }[s] || 'default')
+  const getStatusLabel = (s: string) => ({ active: 'Activo', returned: 'Devuelto', overdue: 'Vencido', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', completed: 'Completado', on_loan: 'En préstamo', cancelled: 'Cancelado' }[s] || s)
+  const getStatusVariant = (s: string): any => ({ approved: 'success', active: 'success', returned: 'default', completed: 'default', pending: 'warning', rejected: 'danger', overdue: 'danger', cancelled: 'danger', on_loan: 'success' }[s] || 'default')
   const formatDate = (d: string) => new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const barColors = ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#4c1d95']
 
