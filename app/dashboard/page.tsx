@@ -1,28 +1,35 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { useChartColors } from '@/hooks/useChartColors'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Badge } from '@/components/ui'
 import api from '@/lib/api'
 import Link from 'next/link'
 import {
-  Package, ArrowLeftRight, FileText, Users, Tag, MapPin,
-  AlertTriangle, Clock, Bell, LayoutGrid, BarChart3, QrCode,
-  ArrowRight, Building2, ChevronRight,
-  Activity, Star, Zap,
+  Package, ArrowLeftRight, FileText, Users,
+  AlertTriangle, Clock, Bell,
+  ArrowRight, Building2, ChevronRight, Star, Copy, Check,
 } from 'lucide-react'
 import {
-  PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts'
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
   const chart = useChartColors()
+  const [copied, setCopied] = useState(false)
+
+  const copyCode = () => {
+    const code = (user as any)?.account?.company_code
+    if (!code) return
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const { data: materialsResponse, isLoading: materialsLoading } = useQuery({
     queryKey: ['materials'],
@@ -93,7 +100,6 @@ export default function DashboardPage() {
     locations: locations.length,
   }), [materials, loans, requests, users, categories, locations])
 
-  // Top 5 materiales más prestados
   const topMaterialsData = useMemo(() => {
     const map = new Map<number, { name: string; count: number }>()
     loans.forEach((loan: any) => {
@@ -104,7 +110,6 @@ export default function DashboardPage() {
     return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 5)
   }, [loans])
 
-  // Tendencia últimos 14 días
   const loanTrendsData = useMemo(() => {
     const days = Array.from({ length: 14 }, (_, i) => {
       const d = new Date()
@@ -112,14 +117,8 @@ export default function DashboardPage() {
       return d.toISOString().split('T')[0]
     })
     return days.map(date => {
-      const dayLoans = loans.filter((l: any) => {
-        const d = new Date(l.created_at || l.issued_at).toISOString().split('T')[0]
-        return d === date
-      })
-      const dayReqs = requests.filter((r: any) => {
-        const d = new Date(r.created_at || r.request_date).toISOString().split('T')[0]
-        return d === date
-      })
+      const dayLoans = loans.filter((l: any) => new Date(l.created_at || l.issued_at).toISOString().split('T')[0] === date)
+      const dayReqs = requests.filter((r: any) => new Date(r.created_at || r.request_date).toISOString().split('T')[0] === date)
       return {
         date: new Date(date).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }),
         prestamos: dayLoans.length,
@@ -128,72 +127,56 @@ export default function DashboardPage() {
     })
   }, [loans, requests])
 
-  // Material status pie
-  const materialStatusData = useMemo(() => [
+  const materialStatusPie = useMemo(() => [
     { name: 'Disponibles', value: stats.materials.available, color: '#22c55e' },
     { name: 'En Uso', value: stats.materials.inUse, color: '#8b5cf6' },
     { name: 'Stock Bajo', value: stats.materials.lowStock, color: '#f59e0b' },
-  ].filter(i => i.value > 0), [stats.materials])
+  ].filter(d => d.value > 0), [stats.materials])
 
-  // Recent activity combined
   const recentActivity = useMemo(() => {
     const all: any[] = [
       ...loans.slice(0, 8).map((l: any) => ({
-        type: 'loan',
-        title: l.material_detail?.name || 'Material',
+        type: 'loan', title: l.material_detail?.name || 'Material',
         user: l.borrower_detail?.full_name || 'Usuario',
-        date: l.created_at || l.issued_at,
-        status: l.status,
+        date: l.created_at || l.issued_at, status: l.status,
       })),
       ...requests.slice(0, 5).map((r: any) => ({
-        type: 'request',
-        title: `Solicitud`,
+        type: 'request', title: 'Solicitud',
         user: r.requester_detail?.full_name || 'Usuario',
-        date: r.created_at || r.request_date,
-        status: r.status,
+        date: r.created_at || r.request_date, status: r.status,
       })),
     ]
-    return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6)
+    return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
   }, [loans, requests])
 
   const alerts = [
     stats.materials.lowStock > 0 && {
-      href: '/materials', icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30',
+      href: '/materials', icon: AlertTriangle,
+      color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500',
       title: 'Stock Bajo', desc: `${stats.materials.lowStock} materiales requieren atención`,
     },
     stats.loans.overdue > 0 && {
-      href: '/loans', icon: Clock, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30',
+      href: '/loans', icon: Clock,
+      color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500',
       title: 'Préstamos Vencidos', desc: `${stats.loans.overdue} préstamos retrasados`,
     },
     stats.requests.pending > 0 && {
-      href: '/requests', icon: Bell, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30',
+      href: '/requests', icon: Bell,
+      color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500',
       title: 'Solicitudes Pendientes', desc: `${stats.requests.pending} por revisar`,
     },
   ].filter(Boolean) as any[]
 
-  const quickLinks = [
-    { href: '/materials', icon: Package, label: 'Materiales', value: stats.materials.total, color: 'text-primary', gradient: 'from-primary/20 to-primary/5', border: 'border-primary/30' },
-    { href: '/categories', icon: Tag, label: 'Categorías', value: stats.categories, color: 'text-blue-400', gradient: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/30' },
-    { href: '/locations', icon: MapPin, label: 'Ubicaciones', value: stats.locations, color: 'text-green-400', gradient: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30' },
-    { href: '/loans', icon: ArrowLeftRight, label: 'Préstamos', value: stats.loans.active, color: 'text-emerald-400', gradient: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/30' },
-    { href: '/users', icon: Users, label: 'Usuarios', value: stats.users.total, color: 'text-violet-400', gradient: 'from-violet-500/20 to-violet-500/5', border: 'border-violet-500/30' },
-    { href: '/requests', icon: FileText, label: 'Solicitudes', value: stats.requests.pending, color: 'text-amber-400', gradient: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30' },
-    { href: '/labels', icon: QrCode, label: 'Etiquetas QR', color: 'text-cyan-400', gradient: 'from-cyan-500/20 to-cyan-500/5', border: 'border-cyan-500/30' },
-    { href: '/reports', icon: BarChart3, label: 'Reportes', color: 'text-rose-400', gradient: 'from-rose-500/20 to-rose-500/5', border: 'border-rose-500/30' },
-  ]
-
   const getStatusLabel = (s: string) => ({ active: 'Activo', returned: 'Devuelto', overdue: 'Vencido', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' }[s] || s)
   const getStatusVariant = (s: string): any => ({ approved: 'success', active: 'success', returned: 'default', pending: 'warning', rejected: 'danger', overdue: 'danger' }[s] || 'default')
   const formatDate = (d: string) => new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-
-  const TOOLTIP_STYLE = chart.tooltipStyle
+  const barColors = ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#4c1d95']
 
   if (materialsLoading || loansLoading || requestsLoading || usersLoading) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-primary"></div>
-          <p className="text-base text-muted-foreground">Cargando dashboard...</p>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
         </div>
       </DashboardLayout>
     )
@@ -201,332 +184,275 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-8">
+      <div className="p-3 flex flex-col gap-2 h-full">
 
-        {/* === HERO HEADER === */}
-        <div className="relative overflow-hidden rounded-2xl border-2 border-primary/25 p-8"
-          style={{ background: 'linear-gradient(135deg, hsl(var(--primary)/0.18) 0%, hsl(var(--primary)/0.08) 50%, transparent 100%)' }}>
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        {/* ── HERO ── */}
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/25 via-primary/10 to-background border border-primary/20 px-4 py-2.5">
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground mb-1 font-medium tracking-widest uppercase">Bienvenido de vuelta</p>
-              <h1 className="text-4xl font-bold text-foreground tracking-tight">
-                {user?.full_name || user?.email || 'Administrador'}
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Panel de control</p>
+              <h1 className="text-xl font-bold text-foreground leading-tight">
+                Bienvenido, <span className="text-primary">{user?.full_name?.split(' ')[0] || 'Admin'}</span>
               </h1>
-              <div className="flex flex-wrap items-center gap-3 mt-4">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {user?.account?.company_name && (
-                  <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary/40 rounded-lg text-sm font-medium">
-                    <Building2 className="h-4 w-4 text-primary" />{user.account.company_name}
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Building2 className="h-3 w-3 text-primary" />{user.account.company_name}
                   </span>
                 )}
-                <Badge variant="default" className="text-sm px-3 py-1.5 capitalize">
+                <Badge variant="default" className="text-[10px] px-1.5 py-0">
                   {user?.user_type === 'inventarista' ? 'Administrador' : 'Empleado'}
                 </Badge>
+                {user?.user_type === 'inventarista' && (user as any)?.account?.company_code && (
+                  <>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="text-[10px] text-muted-foreground">Código:</span>
+                    <button
+                      onClick={copyCode}
+                      title="Copiar código"
+                      className="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      {(user as any).account.company_code}
+                      {copied ? <Check className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-            {/* Esta semana quick stats */}
-            <div className="flex gap-4">
-              <div className="text-center px-5 py-3 bg-white/5 rounded-xl border border-white/10">
-                <p className="text-3xl font-bold text-primary">{stats.loans.thisWeek}</p>
-                <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Préstamos<br />esta semana</p>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-primary leading-none">{stats.loans.thisWeek}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Préstamos<br />semana</p>
               </div>
-              <div className="text-center px-5 py-3 bg-white/5 rounded-xl border border-white/10">
-                <p className="text-3xl font-bold text-amber-400">{stats.requests.thisWeek}</p>
-                <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Solicitudes<br />esta semana</p>
+              <div className="w-px h-8 bg-border/40" />
+              <div className="text-center">
+                <p className="text-2xl font-bold text-amber-400 leading-none">{stats.requests.thisWeek}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Solicitudes<br />semana</p>
               </div>
-              <div className="text-center px-5 py-3 bg-white/5 rounded-xl border border-white/10">
-                <p className="text-3xl font-bold text-green-400">{stats.loans.returned}</p>
-                <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Devueltos<br />total</p>
+              <div className="w-px h-8 bg-border/40" />
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-400 leading-none">{stats.loans.returned}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight mt-0.5">Devueltos<br />total</p>
               </div>
             </div>
           </div>
-          {/* decorative circles */}
-          <div className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
-          <div className="absolute bottom-0 right-32 w-40 h-40 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%)', transform: 'translateY(50%)' }} />
         </div>
 
-        {/* === ALERTS === */}
+        {/* ── ALERTS ── */}
         {alerts.length > 0 && (
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className={`grid gap-2 ${alerts.length === 1 ? 'grid-cols-1' : alerts.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
             {alerts.map((alert, i) => (
               <Link key={i} href={alert.href}>
-                <div className={`p-4 rounded-xl border-2 ${alert.border} ${alert.bg} hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer group`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-lg ${alert.bg}`}><alert.icon className={`h-5 w-5 ${alert.color}`} /></div>
-                    <div className="flex-1">
-                      <p className={`font-semibold ${alert.color}`}>{alert.title}</p>
-                      <p className="text-sm text-muted-foreground">{alert.desc}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-card border border-border/50 border-l-4 ${alert.border} hover:opacity-90 transition-opacity cursor-pointer group`}>
+                  <div className={`p-1.5 rounded-md ${alert.bg} flex-shrink-0`}>
+                    <alert.icon className={`h-4 w-4 ${alert.color}`} />
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold ${alert.color}`}>{alert.title}</p>
+                    <p className="text-[11px] text-muted-foreground">{alert.desc}</p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </Link>
             ))}
           </div>
         )}
 
-        {/* === 4 STAT CARDS === */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Materiales */}
-          <div className="relative overflow-hidden rounded-xl border-2 border-primary/30 p-5 bg-gradient-to-br from-primary/15 to-primary/5">
-            <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-primary/10 -translate-y-1/2 translate-x-1/2" />
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-lg bg-primary/20"><Package className="h-5 w-5 text-primary" /></div>
-              <span className="text-5xl font-black text-primary">{stats.materials.total}</span>
-            </div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Materiales</p>
-            <div className="flex gap-3 text-sm">
-              <span className="text-green-400 font-semibold">{stats.materials.available} disp.</span>
-              <span className="text-violet-400 font-semibold">{stats.materials.inUse} uso</span>
-            </div>
-          </div>
-
-          {/* Préstamos Activos */}
-          <div className="relative overflow-hidden rounded-xl border-2 border-green-500/30 p-5 bg-gradient-to-br from-green-500/15 to-green-500/5">
-            <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-green-500/10 -translate-y-1/2 translate-x-1/2" />
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-lg bg-green-500/20"><ArrowLeftRight className="h-5 w-5 text-green-400" /></div>
-              <span className="text-5xl font-black text-green-400">{stats.loans.active}</span>
-            </div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Préstamos Activos</p>
-            <div className="flex gap-3 text-sm">
-              <span className="text-muted-foreground font-semibold">{stats.loans.returned} devueltos</span>
-              {stats.loans.overdue > 0 && <span className="text-red-400 font-semibold">{stats.loans.overdue} vencidos</span>}
-            </div>
-          </div>
-
-          {/* Solicitudes */}
-          <div className="relative overflow-hidden rounded-xl border-2 border-amber-500/30 p-5 bg-gradient-to-br from-amber-500/15 to-amber-500/5">
-            <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-amber-500/10 -translate-y-1/2 translate-x-1/2" />
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-lg bg-amber-500/20"><FileText className="h-5 w-5 text-amber-400" /></div>
-              <span className="text-5xl font-black text-amber-400">{stats.requests.pending}</span>
-            </div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Solicitudes Pendientes</p>
-            <div className="flex gap-3 text-sm">
-              <span className="text-green-400 font-semibold">{stats.requests.approved} aprob.</span>
-              <span className="text-red-400 font-semibold">{stats.requests.rejected} rech.</span>
-            </div>
-          </div>
-
-          {/* Usuarios */}
-          <div className="relative overflow-hidden rounded-xl border-2 border-violet-500/30 p-5 bg-gradient-to-br from-violet-500/15 to-violet-500/5">
-            <div className="absolute top-0 right-0 w-20 h-20 rounded-full bg-violet-500/10 -translate-y-1/2 translate-x-1/2" />
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-lg bg-violet-500/20"><Users className="h-5 w-5 text-violet-400" /></div>
-              <span className="text-5xl font-black text-violet-400">{stats.users.total}</span>
-            </div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Usuarios</p>
-            <div className="flex gap-3 text-sm">
-              <span className="text-blue-400 font-semibold">{stats.users.inventaristas} admin</span>
-              <span className="text-muted-foreground font-semibold">{stats.users.empleados} emp.</span>
-            </div>
-          </div>
-        </div>
-
-        {/* === CHARTS ROW 1: Tendencia 14 días + Top Materiales === */}
-        <div className="grid lg:grid-cols-5 gap-6">
-          {/* Tendencia 14 días - area chart */}
-          <Card className="border-2 lg:col-span-3">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg"><Activity className="h-5 w-5 text-primary" /></div>
-                <div>
-                  <CardTitle className="text-lg">Actividad — Últimos 14 días</CardTitle>
-                  <p className="text-sm text-muted-foreground">Préstamos y solicitudes por día</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={loanTrendsData}>
-                  <defs>
-                    <linearGradient id="gradPrestamos" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradSolicitudes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
-                  <XAxis dataKey="date" stroke={chart.tick} style={{ fontSize: '11px' }} tick={{ fill: chart.tick }} />
-                  <YAxis stroke={chart.tick} style={{ fontSize: '11px' }} tick={{ fill: chart.tick }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Area type="monotone" dataKey="prestamos" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#gradPrestamos)" name="Préstamos" dot={false} activeDot={{ r: 5, fill: '#8b5cf6' }} />
-                  <Area type="monotone" dataKey="solicitudes" stroke="#f59e0b" strokeWidth={2} fill="url(#gradSolicitudes)" name="Solicitudes" dot={false} activeDot={{ r: 4, fill: '#f59e0b' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Top 5 Materiales más prestados */}
-          <Card className="border-2 lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/10 rounded-lg"><Star className="h-5 w-5 text-amber-400" /></div>
-                <div>
-                  <CardTitle className="text-lg">Top Materiales</CardTitle>
-                  <p className="text-sm text-muted-foreground">Más prestados</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {topMaterialsData.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos de préstamos</div>
-              ) : (
-                <div className="space-y-3 mt-1">
-                  {topMaterialsData.map((item, i) => {
-                    const pct = topMaterialsData[0].count > 0 ? (item.count / topMaterialsData[0].count) * 100 : 0
-                    const colors = ['bg-primary', 'bg-violet-500', 'bg-blue-500', 'bg-cyan-500', 'bg-teal-500']
-                    return (
-                      <div key={i}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-muted-foreground w-4">#{i + 1}</span>
-                            <span className="text-sm font-medium text-foreground truncate max-w-[140px]">{item.name}</span>
-                          </div>
-                          <span className="text-sm font-bold text-foreground ml-2">{item.count}</span>
-                        </div>
-                        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                          <div className={`h-full ${colors[i]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* === CHARTS ROW 2: Estado Materiales + Resumen === */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Pie material status */}
-          <Card className="border-2">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg"><Package className="h-5 w-5 text-primary" /></div>
-                <div>
-                  <CardTitle className="text-lg">Estado de Materiales</CardTitle>
-                  <p className="text-sm text-muted-foreground">Distribución actual</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={materialStatusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                    dataKey="value" stroke="none">
-                    {materialStatusData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-3 space-y-2">
-                {materialStatusData.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between px-3 py-2 bg-secondary/20 rounded-lg">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-sm text-foreground">{item.name}</span>
-                    </div>
-                    <span className="text-base font-bold text-foreground">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Actividad Reciente */}
-          <Card className="border-2 lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg"><Clock className="h-5 w-5 text-primary" /></div>
-                  <CardTitle className="text-lg">Actividad Reciente</CardTitle>
-                </div>
-                <Link href="/reports" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  Ver todo <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <div className="text-center py-10">
-                  <Clock className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground text-sm">No hay actividad reciente</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {recentActivity.map((a, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-secondary/15 rounded-xl hover:bg-secondary/25 transition-colors">
-                      <div className={`p-2 rounded-lg flex-shrink-0 ${a.type === 'loan' ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
-                        {a.type === 'loan'
-                          ? <ArrowLeftRight className="h-4 w-4 text-green-400" />
-                          : <FileText className="h-4 w-4 text-amber-400" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {a.type === 'loan' ? `Préstamo: ${a.title}` : `Solicitud de ${a.user}`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {a.type === 'loan' ? `por ${a.user}` : ''} · {formatDate(a.date)}
-                        </p>
-                      </div>
-                      <Badge variant={getStatusVariant(a.status)} className="text-xs px-2 py-0.5 flex-shrink-0">
-                        {getStatusLabel(a.status)}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* === RESUMEN RÁPIDO (mini cards) === */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* ── 4 STAT CARDS ── */}
+        <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Categorías', value: stats.categories, icon: Tag, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-            { label: 'Ubicaciones', value: stats.locations, icon: MapPin, color: 'text-green-400', bg: 'bg-green-500/10' },
-            { label: 'Stock Bajo', value: stats.materials.lowStock, icon: AlertTriangle, color: stats.materials.lowStock > 0 ? 'text-amber-400' : 'text-muted-foreground', bg: 'bg-amber-500/10' },
-            { label: 'Vencidos', value: stats.loans.overdue, icon: Zap, color: stats.loans.overdue > 0 ? 'text-red-400' : 'text-muted-foreground', bg: 'bg-red-500/10' },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className="flex items-center gap-3 p-4 bg-card rounded-xl border-2 border-border/50 hover:border-border transition-colors">
-              <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
-              <div>
-                <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+            {
+              icon: Package, label: 'Materiales', value: stats.materials.total, href: '/materials',
+              color: 'text-primary', border: 'border-primary/40', iconBg: 'bg-primary/15',
+              d1: `${stats.materials.available} disponibles`, d2: `${stats.materials.inUse} en uso`,
+              d1Color: 'text-green-400', d2Color: 'text-amber-400',
+            },
+            {
+              icon: ArrowLeftRight, label: 'Préstamos Activos', value: stats.loans.active, href: '/loans',
+              color: 'text-green-400', border: 'border-green-500/40', iconBg: 'bg-green-500/15',
+              d1: `${stats.loans.returned} devueltos`, d2: `${stats.loans.overdue} vencidos`,
+              d1Color: 'text-muted-foreground', d2Color: stats.loans.overdue > 0 ? 'text-red-400' : 'text-muted-foreground',
+            },
+            {
+              icon: FileText, label: 'Solicitudes Pend.', value: stats.requests.pending, href: '/requests',
+              color: 'text-amber-400', border: 'border-amber-500/40', iconBg: 'bg-amber-500/15',
+              d1: `${stats.requests.approved} aprobadas`, d2: `${stats.requests.rejected} rechazadas`,
+              d1Color: 'text-green-400', d2Color: 'text-red-400',
+            },
+            {
+              icon: Users, label: 'Usuarios', value: stats.users.total, href: '/users',
+              color: 'text-violet-400', border: 'border-violet-500/40', iconBg: 'bg-violet-500/15',
+              d1: `${stats.users.inventaristas} admins`, d2: `${stats.users.empleados} empleados`,
+              d1Color: 'text-primary', d2Color: 'text-violet-400',
+            },
+          ].map(({ icon: Icon, label, value, href, color, border, iconBg, d1, d2, d1Color, d2Color }) => (
+            <Link key={label} href={href}>
+              <div className={`flex flex-col p-3 rounded-xl border-2 ${border} bg-card hover:bg-accent/20 transition-all cursor-pointer group h-full`}>
+                <div className="flex items-start justify-between mb-2">
+                  <div className={`p-2 rounded-lg ${iconBg}`}>
+                    <Icon className={`h-4 w-4 ${color}`} />
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:translate-x-0.5 transition-transform mt-0.5" />
+                </div>
+                <p className={`text-3xl font-bold leading-none ${color}`}>{value}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mt-1.5">{label}</p>
+                <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-2">
+                  <span className={`text-[11px] font-medium ${d1Color}`}>{d1}</span>
+                  <span className="text-muted-foreground/30">·</span>
+                  <span className={`text-[11px] font-medium ${d2Color}`}>{d2}</span>
+                </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 
-        {/* === ACCESO RÁPIDO === */}
-        <div>
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2 bg-primary/10 rounded-lg"><LayoutGrid className="h-5 w-5 text-primary" /></div>
-            <h2 className="text-xl font-bold text-foreground">Acceso Rápido</h2>
+        {/* ── CHART ROW: Área (8 cols) + Top Materiales (4 cols) ── */}
+        <div className="grid grid-cols-12 gap-2" style={{ height: '200px' }}>
+          <div className="col-span-8 bg-card border border-border/50 rounded-xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border/20">
+              <p className="text-sm font-semibold text-foreground">Actividad — Últimos 14 días</p>
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" />Préstamos</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />Solicitudes</span>
+              </div>
+            </div>
+            <div className="flex-1 px-2 pb-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={loanTrendsData}>
+                  <defs>
+                    <linearGradient id="gradPrestamos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradSolicitudes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="date" stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis stroke={chart.tick} tick={{ fill: chart.tick, fontSize: 10 }} tickLine={false} axisLine={false} width={20} />
+                  <Tooltip contentStyle={chart.tooltipStyle} />
+                  <Area type="monotone" dataKey="prestamos" stroke="#8b5cf6" fill="url(#gradPrestamos)" strokeWidth={2.5} name="Préstamos" dot={false} />
+                  <Area type="monotone" dataKey="solicitudes" stroke="#f59e0b" fill="url(#gradSolicitudes)" strokeWidth={2} name="Solicitudes" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {quickLinks.map(({ href, icon: Icon, label, value, color, gradient, border }) => (
-              <Link key={label} href={href}>
-                <div className={`p-5 rounded-xl border-2 ${border} bg-gradient-to-br ${gradient} hover:shadow-xl hover:scale-[1.02] transition-all duration-200 cursor-pointer group`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="p-2.5 rounded-lg bg-white/5"><Icon className={`h-6 w-6 ${color}`} /></div>
-                    {value !== undefined && <span className={`text-2xl font-bold ${color}`}>{value}</span>}
+
+          <div className="col-span-4 bg-card border border-border/50 rounded-xl flex flex-col overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-border/20">
+              <Star className="h-4 w-4 text-amber-400" />
+              <p className="text-sm font-semibold text-foreground">Top Materiales</p>
+            </div>
+            <div className="flex-1 px-4 py-2 space-y-1.5 overflow-hidden">
+              {topMaterialsData.length === 0 ? (
+                <p className="text-xs text-muted-foreground pt-2 text-center">Sin datos aún</p>
+              ) : topMaterialsData.slice(0, 4).map((item, i) => {
+                const pct = topMaterialsData[0].count > 0 ? (item.count / topMaterialsData[0].count) * 100 : 0
+                return (
+                  <div key={i}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-bold text-muted-foreground w-4">#{i + 1}</span>
+                        <span className="text-xs font-medium text-foreground truncate">{item.name}</span>
+                      </div>
+                      <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: barColors[i] }}>{item.count}</span>
+                    </div>
+                    <div className="h-1.5 bg-secondary/60 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColors[i] }} />
+                    </div>
                   </div>
-                  <p className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">{label}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-xs text-muted-foreground">Ver más</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              </Link>
-            ))}
+                )
+              })}
+            </div>
           </div>
         </div>
 
+        {/* ── BOTTOM ROW: Actividad Reciente (7) + Estado Materiales Pie (5) ── */}
+        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0" style={{ height: '240px' }}>
+
+          <div className="col-span-7 h-full bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-primary" />
+                <p className="text-sm font-semibold text-foreground">Actividad Reciente</p>
+              </div>
+              <Link href="/reports" className="text-xs text-primary hover:underline flex items-center gap-1">
+                Ver todo <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-border/20 flex-1 overflow-hidden">
+              {recentActivity.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-4 text-center">Sin actividad reciente</p>
+              ) : recentActivity.map((a, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2 hover:bg-secondary/10 transition-colors">
+                  <div className={`p-1.5 rounded-md flex-shrink-0 ${a.type === 'loan' ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+                    {a.type === 'loan'
+                      ? <ArrowLeftRight className="h-3 w-3 text-green-400" />
+                      : <FileText className="h-3 w-3 text-amber-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{a.type === 'loan' ? a.title : 'Solicitud'}</p>
+                    <p className="text-[10px] text-muted-foreground">{a.user}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <Badge variant={getStatusVariant(a.status)} className="text-[10px]">{getStatusLabel(a.status)}</Badge>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(a.date)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pie Chart: Estado de Materiales */}
+          <div className="col-span-5 h-full bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-border/20 flex-shrink-0">
+              <Package className="h-3.5 w-3.5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Estado de Materiales</p>
+            </div>
+            {materialStatusPie.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-4 text-center">Sin datos</p>
+            ) : (
+              <div className="flex flex-1 min-h-0">
+                <div className="flex-1 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={materialStatusPie} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
+                        {materialStatusPie.map((entry, index) => (
+                          <Cell key={index} fill={entry.color} strokeWidth={0} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={chart.tooltipStyle} formatter={(v: any, n: any) => [`${v} materiales`, n]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="w-36 flex flex-col justify-center pr-4 gap-2">
+                  {materialStatusPie.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="text-[11px] text-muted-foreground">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] font-semibold text-foreground">{item.value}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {stats.materials.total > 0 ? Math.round((item.value / stats.materials.total) * 100) : 0}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-1.5 border-t border-border/20 flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">Total</span>
+                    <span className="font-bold text-foreground">{stats.materials.total}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     </DashboardLayout>
   )

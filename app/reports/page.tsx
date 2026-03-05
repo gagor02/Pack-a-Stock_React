@@ -192,7 +192,7 @@ export default function ReportsPage() {
     return categories
       .map((cat: any) => ({
         name: cat.name,
-        count: materials.filter((m: any) => m.category === cat.id).length,
+        count: materials.filter((m: any) => (m.category?.id ?? m.category) === cat.id).length,
       }))
       .filter((item: any) => item.count > 0)
       .sort((a: any, b: any) => b.count - a.count)

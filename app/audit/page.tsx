@@ -320,7 +320,7 @@ export default function AuditPage() {
               <ShieldCheck className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">Auditoría</h1>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">Registros (Logs)</h1>
               <p className="text-base text-muted-foreground mt-0.5">
                 Registro de todas las acciones del sistema
               </p>

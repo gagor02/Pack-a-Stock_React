@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore'
 import api from '@/lib/api'
 import { AuthResponse, LoginCredentials } from '@/types/auth'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 import { Button } from '@/components/ui'
 import { Package, Lock, Mail, ArrowRight, BarChart3, Shield, Boxes } from 'lucide-react'
 
@@ -183,18 +184,16 @@ export default function LoginPage() {
         <div className="absolute bottom-20 right-32 w-16 h-16 rounded-full bg-white/15" />
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16">
-          <div className="space-y-8">
-            {/* Big Icon */}
-            <div className="p-4 bg-white/10 rounded-2xl w-fit backdrop-blur-sm border border-white/20">
-              <Package className="h-12 w-12 text-white" />
-            </div>
+        <div className="relative z-10 flex flex-col justify-center items-center px-10 xl:px-14 text-center">
+          <div className="space-y-8 w-full">
+            {/* Logo */}
+            <Image src="/logocompletoblanco.png" alt="Pack-a-Stock" width={1136} height={928} className="h-52 w-auto object-contain mx-auto" style={{ mixBlendMode: 'screen' }} />
 
             <div>
               <h2 className="text-4xl xl:text-5xl font-bold text-white leading-tight">
                 Gestiona tu<br />inventario<br />con facilidad
               </h2>
-              <p className="text-lg text-white/70 mt-4 max-w-sm">
+              <p className="text-lg text-white/70 mt-4 max-w-sm mx-auto">
                 Controla materiales, prestamos y ubicaciones desde un solo lugar.
               </p>
             </div>
@@ -202,22 +201,22 @@ export default function LoginPage() {
             {/* Feature Cards */}
             <div className="space-y-3 pt-4">
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
-                <div className="p-2 bg-white/10 rounded-lg">
+                <div className="p-2 bg-white/10 rounded-lg flex-shrink-0">
                   <Boxes className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-white/90 font-medium">Control de inventario en tiempo real</span>
+                <span className="text-white/90 font-medium text-left">Control de inventario en tiempo real</span>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
-                <div className="p-2 bg-white/10 rounded-lg">
+                <div className="p-2 bg-white/10 rounded-lg flex-shrink-0">
                   <BarChart3 className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-white/90 font-medium">Reportes y estadisticas detalladas</span>
+                <span className="text-white/90 font-medium text-left">Reportes y estadisticas detalladas</span>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
-                <div className="p-2 bg-white/10 rounded-lg">
+                <div className="p-2 bg-white/10 rounded-lg flex-shrink-0">
                   <Shield className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-white/90 font-medium">Auditoria y rastreo completo</span>
+                <span className="text-white/90 font-medium text-left">Auditoria y rastreo completo</span>
               </div>
             </div>
           </div>

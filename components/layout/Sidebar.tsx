@@ -1,10 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
+import { useNotifications } from '@/hooks/useNotifications'
+import NotificationBell from '@/components/notifications/NotificationBell'
 import {
   LayoutDashboard,
   Package,
@@ -86,7 +89,7 @@ const navigation = [
     roles: ['inventarista'],
   },
   {
-    name: 'Auditoría',
+    name: 'Registros(Logs)',
     href: '/audit',
     icon: ShieldCheck,
     roles: ['inventarista'],
@@ -103,6 +106,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar, theme, toggleTheme } = useUIStore()
+  const { badgeCounts } = useNotifications()
 
   const filteredNav = navigation.filter((item) =>
     user ? item.roles.includes(user.user_type) : false
@@ -123,24 +127,33 @@ export default function Sidebar() {
       )}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-border">
-        {!sidebarCollapsed && (
-          <span className="text-xl font-bold text-foreground">
-            Pack-a-Stock
-          </span>
+      <div className={clsx(
+        'flex h-16 items-center border-b border-border',
+        sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
+      )}>
+        {sidebarCollapsed ? (
+          <button
+            onClick={toggleSidebar}
+            className="hover:opacity-80 transition-opacity"
+            title="Expandir"
+          >
+            <Image src={theme === 'dark' ? '/iconoblanco.png' : '/icono.png'} alt="Pack-a-Stock" width={558} height={459} className="h-10 w-auto object-contain" />
+          </button>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Image src={theme === 'dark' ? '/iconoblanco.png' : '/icono.png'} alt="Pack-a-Stock" width={558} height={459} className="h-10 w-auto object-contain flex-shrink-0" />
+              <span className="text-lg font-bold text-foreground tracking-tight truncate">Pack-a-Stock</span>
+            </div>
+            <button
+              onClick={toggleSidebar}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors flex-shrink-0"
+              title="Colapsar"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          </>
         )}
-        <button
-          onClick={toggleSidebar}
-          className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={sidebarCollapsed ? 'Expandir' : 'Colapsar'}
-        >
-          <ChevronLeft
-            className={clsx(
-              'h-5 w-5 transition-transform',
-              sidebarCollapsed && 'rotate-180'
-            )}
-          />
-        </button>
       </div>
 
       {/* Navigation */}
@@ -148,6 +161,7 @@ export default function Sidebar() {
         {filteredNav.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(`${item.href}/`)
+          const badge = badgeCounts[item.href] || 0
           return (
             <Link
               key={item.name}
@@ -160,8 +174,27 @@ export default function Sidebar() {
               )}
               title={sidebarCollapsed ? item.name : undefined}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span>{item.name}</span>}
+              <div className="relative flex-shrink-0">
+                <item.icon className="h-5 w-5" />
+                {badge > 0 && sidebarCollapsed && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </div>
+              {!sidebarCollapsed && (
+                <>
+                  <span className="flex-1">{item.name}</span>
+                  {badge > 0 && (
+                    <span className={clsx(
+                      'min-w-[20px] h-5 text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 leading-none flex-shrink-0',
+                      isActive
+                        ? 'bg-white/25 text-white'
+                        : 'bg-red-500 text-white'
+                    )}>
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </>
+              )}
             </Link>
           )
         })}
@@ -169,6 +202,9 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border p-4 space-y-2">
+        {/* Notification Bell */}
+        <NotificationBell sidebarMode sidebarCollapsed={sidebarCollapsed} />
+
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}

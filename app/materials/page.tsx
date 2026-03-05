@@ -32,6 +32,8 @@ import {
   Tag,
   Layers,
   ChevronDown,
+  SlidersHorizontal,
+  AlertTriangle,
 } from 'lucide-react'
 import jsQR from 'jsqr'
 
@@ -95,6 +97,10 @@ export default function MaterialsPage() {
   const [showAllCategories, setShowAllCategories] = useState(false)
   const [filterLocation, setFilterLocation] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterStock, setFilterStock] = useState<string>('')
+  const [filterType, setFilterType] = useState<string>('')
+  const [filterLoanAvailable, setFilterLoanAvailable] = useState<boolean | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [viewingMaterial, setViewingMaterial] = useState<any | null>(null)
@@ -194,8 +200,46 @@ export default function MaterialsPage() {
     const catName = m.category?.name || m.category_name || 'Sin categoría'
     const matchesCategory = filterCategory === 'all' || catName === filterCategory
 
-    return matchesSearch && matchesCategory
+    const matchesStatus = !filterStatus || m.status === filterStatus
+
+    const locName = m.location?.name || m.location_name || ''
+    const matchesLocation = !filterLocation || locName === filterLocation
+
+    const matchesStock =
+      filterStock === 'with_stock' ? m.quantity > 0 :
+      filterStock === 'no_stock' ? m.quantity === 0 :
+      filterStock === 'low_stock' ? m.is_low_stock :
+      true
+
+    const isConsumable = m.category?.is_consumable ?? m.is_consumable ?? false
+    const matchesType =
+      filterType === 'consumable' ? isConsumable :
+      filterType === 'non_consumable' ? !isConsumable :
+      true
+
+    const matchesLoan = filterLoanAvailable === null || m.is_available_for_loan === filterLoanAvailable
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesLocation && matchesStock && matchesType && matchesLoan
   })
+
+  const activeFiltersCount = [
+    filterCategory !== 'all',
+    !!filterStatus,
+    !!filterLocation,
+    !!filterStock,
+    !!filterType,
+    filterLoanAvailable !== null,
+  ].filter(Boolean).length
+
+  const clearAllFilters = () => {
+    setFilterCategory('all')
+    setFilterStatus('')
+    setFilterLocation('')
+    setFilterStock('')
+    setFilterType('')
+    setFilterLoanAvailable(null)
+    setSearchTerm('')
+  }
 
   const createMutation = useMutation({
     mutationFn: async (data: MaterialFormData) => {
@@ -770,117 +814,223 @@ export default function MaterialsPage() {
                 placeholder="Buscar por nombre, SKU o número de serie..."
                 value={searchTerm}
                 onChange={(e: any) => setSearchTerm(e.target.value)}
-                className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 pr-12 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
-            {/* Category Filter */}
-            {(() => {
-              const categoryEntries = Object.entries(categoryCounts)
-              const MAX_VISIBLE = 4
-              const hasOverflow = categoryEntries.length > MAX_VISIBLE
-              const visibleCategories = hasOverflow ? categoryEntries.slice(0, MAX_VISIBLE) : categoryEntries
-              const hiddenCategories = hasOverflow ? categoryEntries.slice(MAX_VISIBLE) : []
-              const selectedHiddenCat = hiddenCategories.find(([name]) => name === filterCategory)
-
-              return (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setFilterCategory('all')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                      filterCategory === 'all'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
-                    }`}
-                  >
-                    <Layers className="h-4 w-4" />
-                    Todos
-                    <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                      filterCategory === 'all' ? 'bg-primary-foreground/20' : 'bg-secondary/50'
-                    }`}>
-                      {materials.length}
+            {/* Filter Panel */}
+            <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
+              {/* Header — click to toggle */}
+              <button
+                onClick={() => setShowFilters(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3 border-b border-border/20 bg-secondary/10 hover:bg-secondary/20 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">Filtros</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                      {activeFiltersCount}
                     </span>
-                  </button>
-                  {visibleCategories.map(([catName, count]) => (
-                    <button
-                      key={catName}
-                      onClick={() => setFilterCategory(catName)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                        filterCategory === catName
-                          ? 'bg-primary text-primary-foreground shadow-lg'
-                          : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
-                      }`}
-                    >
-                      <Tag className="h-4 w-4" />
-                      {catName}
-                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                        filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
-                      }`}>
-                        {count as number}
-                      </span>
-                    </button>
-                  ))}
-                  {hasOverflow && (
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowAllCategories(!showAllCategories)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                          selectedHiddenCat
-                            ? 'bg-primary text-primary-foreground shadow-lg'
-                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/50'
-                        }`}
-                      >
-                        {selectedHiddenCat ? (
-                          <>
-                            <Tag className="h-4 w-4" />
-                            {selectedHiddenCat[0]}
-                            <span className={`px-2 py-0.5 rounded-lg text-xs font-bold bg-primary-foreground/20`}>
-                              {selectedHiddenCat[1] as number}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            +{hiddenCategories.length} más
-                          </>
-                        )}
-                        <ChevronDown className={`h-4 w-4 transition-transform ${showAllCategories ? 'rotate-180' : ''}`} />
-                      </button>
-                      {showAllCategories && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setShowAllCategories(false)} />
-                          <div className="absolute top-full left-0 mt-2 z-50 bg-card border-2 border-border rounded-xl shadow-2xl p-2 min-w-[220px] max-h-[300px] overflow-y-auto">
-                            {hiddenCategories.map(([catName, count]) => (
-                              <button
-                                key={catName}
-                                onClick={() => {
-                                  setFilterCategory(catName)
-                                  setShowAllCategories(false)
-                                }}
-                                className={`flex items-center justify-between gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                  filterCategory === catName
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-foreground hover:bg-secondary/50'
-                                }`}
-                              >
-                                <span className="flex items-center gap-2">
-                                  <Tag className="h-4 w-4" />
-                                  {catName}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
-                                  filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/50'
-                                }`}>
-                                  {count as number}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
                   )}
                 </div>
-              )
-            })()}
+                <div className="flex items-center gap-2">
+                  {activeFiltersCount > 0 && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); clearAllFilters() }}
+                      onKeyDown={(e) => e.key === 'Enter' && clearAllFilters()}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <X className="h-3 w-3" /> Limpiar
+                    </div>
+                  )}
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              {showFilters && (
+              <div className="p-4 space-y-0 divide-y divide-border/20">
+                {/* Estado */}
+                <div className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Estado</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Todos', value: '' },
+                      { label: 'Disponible', value: 'available', dot: 'bg-emerald-500' },
+                      { label: 'En uso', value: 'in_use', dot: 'bg-amber-500' },
+                      { label: 'En préstamo', value: 'on_loan', dot: 'bg-blue-500' },
+                      { label: 'Mantenimiento', value: 'maintenance', dot: 'bg-red-500' },
+                    ].map(({ label, value, dot }) => (
+                      <button key={value} onClick={() => setFilterStatus(value)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filterStatus === value
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        {dot && <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} />}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stock */}
+                <div className="flex items-start gap-4 py-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Stock</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Todos', value: '' },
+                      { label: 'Con stock', value: 'with_stock' },
+                      { label: 'Sin stock', value: 'no_stock' },
+                      { label: 'Stock bajo', value: 'low_stock', icon: true },
+                    ].map(({ label, value, icon }) => (
+                      <button key={value} onClick={() => setFilterStock(value)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filterStock === value
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        {icon && <AlertTriangle className="h-3 w-3 text-amber-400" />}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tipo */}
+                <div className="flex items-start gap-4 py-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Tipo</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Todos', value: '' },
+                      { label: 'Consumible', value: 'consumable' },
+                      { label: 'No consumible', value: 'non_consumable' },
+                    ].map(({ label, value }) => (
+                      <button key={value} onClick={() => setFilterType(value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filterType === value
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Préstamo */}
+                <div className="flex items-start gap-4 py-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Préstamo</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Todos', value: null },
+                      { label: 'Disponible p/ préstamo', value: true },
+                      { label: 'No disponible p/ préstamo', value: false },
+                    ].map(({ label, value }) => (
+                      <button key={String(value)} onClick={() => setFilterLoanAvailable(value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filterLoanAvailable === value
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Categoría */}
+                {categories.length > 0 && (
+                  <div className="flex items-start gap-4 py-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Categoría</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button onClick={() => setFilterCategory('all')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filterCategory === 'all'
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        <Layers className="h-3 w-3" />
+                        Todas
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${filterCategory === 'all' ? 'bg-primary-foreground/20' : 'bg-secondary/60'}`}>
+                          {materials.length}
+                        </span>
+                      </button>
+                      {Object.entries(categoryCounts).map(([catName, count]) => (
+                        <button key={catName} onClick={() => setFilterCategory(catName)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            filterCategory === catName
+                              ? 'bg-primary text-primary-foreground shadow-md'
+                              : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                          }`}
+                        >
+                          <Tag className="h-3 w-3" />
+                          {catName}
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${filterCategory === catName ? 'bg-primary-foreground/20' : 'bg-secondary/60'}`}>
+                            {count as number}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ubicación */}
+                {locations.length > 0 && (
+                  <div className="flex items-start gap-4 py-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 w-24 flex-shrink-0">Ubicación</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button onClick={() => setFilterLocation('')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          !filterLocation
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                        }`}
+                      >
+                        Todas
+                      </button>
+                      {locations.map((loc: Location) => (
+                        <button key={loc.id} onClick={() => setFilterLocation(filterLocation === loc.name ? '' : loc.name)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            filterLocation === loc.name
+                              ? 'bg-primary text-primary-foreground shadow-md'
+                              : 'bg-secondary/30 text-muted-foreground hover:bg-secondary/60'
+                          }`}
+                        >
+                          <MapPin className="h-3 w-3" />
+                          {loc.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
+            </div>
+
+            {/* Results count */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                {filteredMaterials.length === materials.length
+                  ? `${materials.length} materiales`
+                  : `${filteredMaterials.length} de ${materials.length} materiales`}
+              </span>
+              {activeFiltersCount > 0 && (
+                <span className="text-xs">{activeFiltersCount} filtro{activeFiltersCount !== 1 ? 's' : ''} activo{activeFiltersCount !== 1 ? 's' : ''}</span>
+              )}
+            </div>
 
             {/* Materials Grid */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
