@@ -140,14 +140,20 @@ export default function MaterialsPage() {
   const { data: materialsResponse = [], isLoading } = useQuery({
     queryKey: ['materials'],
     queryFn: async () => {
-      const response = await api.get('/materials/materials/')
-      return response.data
+      let allResults: any[] = []
+      let url = '/materials/materials/?page_size=100'
+      while (url) {
+        const response = await api.get(url)
+        const data = response.data
+        if (Array.isArray(data)) return data
+        allResults = allResults.concat(data.results ?? [])
+        url = data.next ? data.next.replace(/^https?:\/\/[^/]+/, '') : null
+      }
+      return allResults
     },
   })
 
-  const materials = Array.isArray(materialsResponse)
-    ? materialsResponse
-    : materialsResponse?.results ?? []
+  const materials = Array.isArray(materialsResponse) ? materialsResponse : []
 
   const { data: categoriesResponse = [] } = useQuery({
     queryKey: ['categories'],
