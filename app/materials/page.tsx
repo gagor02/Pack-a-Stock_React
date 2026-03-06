@@ -57,6 +57,7 @@ interface MaterialFormData {
   sku: string
   serial_number: string
   quantity: number
+  available_quantity?: number
   min_stock_level: number
   unit_of_measure: string
   status: string
@@ -145,6 +146,7 @@ export default function MaterialsPage() {
       if (Array.isArray(data)) return data
       return data.results ?? []
     },
+    staleTime: 0,
   })
 
   const materials = Array.isArray(materialsResponse) ? materialsResponse : []
@@ -206,8 +208,8 @@ export default function MaterialsPage() {
     const matchesLocation = !filterLocation || locName === filterLocation
 
     const matchesStock =
-      filterStock === 'with_stock' ? m.quantity > 0 :
-      filterStock === 'no_stock' ? m.quantity === 0 :
+      filterStock === 'with_stock' ? m.available_quantity > 0 :
+      filterStock === 'no_stock' ? m.available_quantity === 0 :
       filterStock === 'low_stock' ? m.is_low_stock :
       true
 
@@ -1118,7 +1120,7 @@ export default function MaterialsPage() {
                           <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Stock</p>
                           <p className="text-xs font-medium text-foreground flex items-center gap-1">
                             <Hash className="h-3 w-3 flex-shrink-0" />
-                            {material.quantity} {translateUnit(material.unit_of_measure || 'unit')}
+                            {material.available_quantity ?? material.quantity} {translateUnit(material.unit_of_measure || 'unit')}
                           </p>
                         </div>
                       </div>
@@ -1300,10 +1302,10 @@ export default function MaterialsPage() {
                   </div>
                   <div className="bg-secondary/20 rounded-xl p-3">
                     <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
-                      Cantidad
+                      Disponible
                     </h4>
                     <p className="text-base font-medium text-foreground">
-                      {viewingMaterial.quantity} {translateUnit(viewingMaterial.unit_of_measure || 'unit')}
+                      {viewingMaterial.available_quantity} {translateUnit(viewingMaterial.unit_of_measure || 'unit')}
                     </p>
                   </div>
                   <div className="bg-secondary/20 rounded-xl p-3">
