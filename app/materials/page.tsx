@@ -140,16 +140,10 @@ export default function MaterialsPage() {
   const { data: materialsResponse = [], isLoading } = useQuery({
     queryKey: ['materials'],
     queryFn: async () => {
-      let allResults: any[] = []
-      let url = '/materials/materials/?page_size=100'
-      while (url) {
-        const response = await api.get(url)
-        const data = response.data
-        if (Array.isArray(data)) return data
-        allResults = allResults.concat(data.results ?? [])
-        url = data.next ? data.next.replace(/^https?:\/\/[^/]+/, '') : null
-      }
-      return allResults
+      const response = await api.get('/materials/materials/')
+      const data = response.data
+      if (Array.isArray(data)) return data
+      return data.results ?? []
     },
   })
 
