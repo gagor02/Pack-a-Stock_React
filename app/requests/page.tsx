@@ -190,7 +190,13 @@ export default function RequestsPage() {
 
   const formatDate = (date?: string) => {
     if (!date) return '---'
-    return new Date(date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+    const d = new Date(date)
+    const datePart = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+    const hours = d.getHours()
+    const minutes = d.getMinutes()
+    if (hours === 0 && minutes === 0) return datePart
+    const timePart = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })
+    return `${datePart} ${timePart}`
   }
 
   return (
