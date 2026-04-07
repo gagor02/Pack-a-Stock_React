@@ -24,6 +24,7 @@ import {
   Hash,
   X,
   Package,
+  Lock,
 } from 'lucide-react'
 
 interface LocationFormData {
@@ -94,6 +95,8 @@ export default function LocationsPage() {
 
   const maxLocations = account?.max_locations ?? 0
   const isAtLocationLimit = maxLocations !== -1 && locations.length >= maxLocations
+  const lockedLocations = locations.filter((l: any) => l.is_locked)
+  const hasLockedLocations = lockedLocations.length > 0
 
   const stats = useMemo(() => {
     const cities = new Set(locations.map((l: any) => l.city).filter(Boolean))
@@ -280,8 +283,25 @@ export default function LocationsPage() {
           )}
         </div>
 
+        {/* Locked locations banner */}
+        {hasLockedLocations && !showForm && (
+          <div className="p-4 bg-red-900/20 border-2 border-red-500/30 rounded-xl flex items-start gap-4">
+            <div className="p-2 bg-red-500/20 rounded-lg mt-0.5">
+              <Lock className="h-5 w-5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-base text-red-300 font-semibold">
+                {lockedLocations.length} ubicación(es) bloqueada(s) por límite de plan
+              </p>
+              <p className="text-sm text-red-400/80 mt-1">
+                Tu plan actual (Freemium) solo permite {maxLocations} ubicación activa. Las ubicaciones bloqueadas y sus materiales son de solo lectura hasta que renueves tu suscripción.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Limit Warning */}
-        {isAtLocationLimit && !showForm && (
+        {isAtLocationLimit && !hasLockedLocations && !showForm && (
           <div className="p-4 bg-yellow-900/20 border-2 border-yellow-500/30 rounded-xl flex items-center gap-4">
             <div className="p-2 bg-yellow-500/20 rounded-lg">
               <AlertTriangle className="h-5 w-5 text-yellow-400" />
@@ -511,18 +531,35 @@ export default function LocationsPage() {
             {filteredLocations.map((location: any) => (
               <Card
                 key={location.id}
-                className="border-l-4 border-l-primary hover:shadow-xl transition-all duration-300 overflow-hidden"
+                className={`border-l-4 hover:shadow-xl transition-all duration-300 overflow-hidden ${
+                  location.is_locked
+                    ? 'border-l-red-500 opacity-75'
+                    : 'border-l-primary'
+                }`}
               >
                 <CardContent className="p-0">
                   <div className="flex flex-col gap-4 p-5">
+                    {/* Locked banner */}
+                    {location.is_locked && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <Lock className="h-4 w-4 text-red-400 flex-shrink-0" />
+                        <p className="text-sm text-red-400 font-medium">
+                          Ubicación bloqueada — renueva tu plan para reactivarla
+                        </p>
+                      </div>
+                    )}
+
                     {/* Location Info */}
                     <div className="flex-1 min-w-0">
                       {/* Name */}
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2.5 rounded-xl bg-primary/10">
-                          <Map className="h-6 w-6 text-primary" />
+                        <div className={`p-2.5 rounded-xl ${location.is_locked ? 'bg-red-500/10' : 'bg-primary/10'}`}>
+                          {location.is_locked
+                            ? <Lock className="h-6 w-6 text-red-400" />
+                            : <Map className="h-6 w-6 text-primary" />
+                          }
                         </div>
-                        <h3 className="text-lg font-bold text-foreground">
+                        <h3 className={`text-lg font-bold ${location.is_locked ? 'text-muted-foreground' : 'text-foreground'}`}>
                           {location.name}
                         </h3>
                       </div>
@@ -566,6 +603,7 @@ export default function LocationsPage() {
                         variant="secondary"
                         size="lg"
                         className="w-full text-base py-3"
+                        disabled={location.is_locked}
                       >
                         <Edit2 className="h-5 w-5 mr-2" />
                         Editar

@@ -34,6 +34,7 @@ import {
   ChevronDown,
   SlidersHorizontal,
   AlertTriangle,
+  Lock,
 } from 'lucide-react'
 import jsQR from 'jsqr'
 
@@ -1068,7 +1069,13 @@ export default function MaterialsPage() {
                       )}
 
                       {/* Status Badge - Top Right */}
-                      <div className="absolute top-2 right-2">
+                      <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                        {material.is_locked && (
+                          <Badge variant="danger" className="shadow-lg text-xs flex items-center gap-1">
+                            <Lock className="h-3 w-3" />
+                            Bloqueado
+                          </Badge>
+                        )}
                         <Badge
                           variant={
                             material.status === 'available'
@@ -1232,6 +1239,12 @@ export default function MaterialsPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {viewingMaterial.is_locked && (
+                      <Badge variant="danger" className="flex items-center gap-1">
+                        <Lock className="h-3 w-3" />
+                        Bloqueado
+                      </Badge>
+                    )}
                     <Badge
                       variant={
                         viewingMaterial.status === 'available'
