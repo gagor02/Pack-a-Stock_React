@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { useMutation } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import api from '@/lib/api'
+import { auth, googleProvider } from '@/lib/firebase'
+import { signInWithPopup } from 'firebase/auth'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui'
 import {
@@ -35,6 +37,9 @@ export default function RegisterPage() {
     phone: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleToken, setGoogleToken] = useState<string | null>(null)
+  const [googleEmail, setGoogleEmail] = useState('')
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterData) => {
@@ -145,8 +150,63 @@ export default function RegisterPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (validateStep2()) {
+    if (!validateStep2()) return
+
+    if (googleToken) {
+      // Registro via Google — usar endpoint firebase
+      if (!formData.company_name.trim()) {
+        toast.error('El nombre de la empresa es requerido')
+        return
+      }
+      googleRegisterMutation.mutate({
+        firebase_token: googleToken,
+        user_type: 'inventarista',
+        company_name: formData.company_name,
+        full_name: formData.full_name,
+      })
+    } else {
       registerMutation.mutate(formData)
+    }
+  }
+
+  const googleRegisterMutation = useMutation({
+    mutationFn: async (data: Record<string, string>) => {
+      const response = await api.post('/auth/firebase/', data)
+      return response.data
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('Cuenta creada exitosamente')
+        localStorage.setItem('access_token', data.data.tokens.access)
+        localStorage.setItem('refresh_token', data.data.tokens.refresh)
+        localStorage.setItem('new_account', 'true')
+        setAuth(data.data.user, data.data.tokens.access, data.data.tokens.refresh)
+        router.push('/settings')
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al crear la cuenta')
+    },
+  })
+
+  const handleGoogleRegister = async () => {
+    setGoogleLoading(true)
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const token = await result.user.getIdToken()
+      const name = result.user.displayName || ''
+      const email = result.user.email || ''
+      setGoogleToken(token)
+      setGoogleEmail(email)
+      setFormData((prev) => ({ ...prev, full_name: name, email, password: 'firebase-auth' }))
+      setStep(2) // saltar directo a datos de empresa
+      toast.success(`Cuenta Google vinculada: ${email}`)
+    } catch (error: any) {
+      if (error?.code !== 'auth/popup-closed-by-user') {
+        toast.error('Error al conectar con Google')
+      }
+    } finally {
+      setGoogleLoading(false)
     }
   }
 
@@ -181,6 +241,48 @@ export default function RegisterPage() {
               Registra tu empresa y empieza a gestionar tu inventario
             </p>
           </div>
+
+          {/* Google Register — solo mostrar en step 1 sin google vinculado */}
+          {step === 1 && !googleToken && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogleRegister}
+                disabled={googleLoading}
+                className="w-full flex items-center justify-center gap-3 rounded-xl border-2 border-border bg-card px-5 py-3.5 text-base font-medium text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50"
+              >
+                {googleLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-foreground" />
+                ) : (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                )}
+                {googleLoading ? 'Conectando...' : 'Registrarse con Google'}
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border/50" />
+                <span className="text-sm text-muted-foreground">o con email</span>
+                <div className="flex-1 h-px bg-border/50" />
+              </div>
+            </>
+          )}
+
+          {/* Indicador de cuenta Google vinculada en step 2 */}
+          {googleToken && (
+            <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-xl border border-green-500/20">
+              <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span className="text-sm text-green-600 font-medium">Google: {googleEmail}</span>
+            </div>
+          )}
 
           {/* Step Indicator */}
           <div className="flex items-center gap-2">
@@ -333,11 +435,11 @@ export default function RegisterPage() {
               ) : (
                 <Button
                   type="submit"
-                  disabled={registerMutation.isPending}
+                  disabled={registerMutation.isPending || googleRegisterMutation.isPending}
                   size="lg"
                   className="flex-1 text-base"
                 >
-                  {registerMutation.isPending ? (
+                  {(registerMutation.isPending || googleRegisterMutation.isPending) ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
                       Creando cuenta...

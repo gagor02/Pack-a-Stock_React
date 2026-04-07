@@ -1125,6 +1125,20 @@ export default function MaterialsPage() {
                         </div>
                       </div>
 
+                      {/* Próxima disponibilidad */}
+                      {material.available_quantity === 0 && material.next_available_date && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-amber-500 bg-amber-500/10 rounded-lg px-2.5 py-1.5">
+                          <Clock className="h-3 w-3 flex-shrink-0" />
+                          <span>Disponible aprox. {new Date(material.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      )}
+                      {material.available_quantity === 0 && !material.next_available_date && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-red-500 bg-red-500/10 rounded-lg px-2.5 py-1.5">
+                          <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                          <span>Sin fecha de devolución registrada</span>
+                        </div>
+                      )}
+
                       {/* Serial / SKU Row */}
                       {(material.serial_number || material.sku) && (
                         <div className="flex flex-wrap gap-1.5">
@@ -1307,6 +1321,18 @@ export default function MaterialsPage() {
                     <p className="text-base font-medium text-foreground">
                       {viewingMaterial.available_quantity ?? viewingMaterial.quantity} {translateUnit(viewingMaterial.unit_of_measure || 'unit')}
                     </p>
+                    {viewingMaterial.available_quantity === 0 && viewingMaterial.next_available_date && (
+                      <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Disponible aprox. {new Date(viewingMaterial.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </p>
+                    )}
+                    {viewingMaterial.available_quantity === 0 && !viewingMaterial.next_available_date && (
+                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Sin fecha de devolución registrada
+                      </p>
+                    )}
                   </div>
                   <div className="bg-secondary/20 rounded-xl p-3">
                     <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
@@ -1603,6 +1629,12 @@ export default function MaterialsPage() {
                   <div className="bg-secondary/20 rounded-xl p-3">
                     <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Disponible</h4>
                     <p className="text-base font-medium text-foreground">{scannedMaterial.available_quantity} {translateUnit(scannedMaterial.unit_of_measure || 'unit')}</p>
+                    {scannedMaterial.available_quantity === 0 && scannedMaterial.next_available_date && (
+                      <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Disponible aprox. {new Date(scannedMaterial.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </p>
+                    )}
                   </div>
                   <div className="bg-secondary/20 rounded-xl p-3">
                     <h4 className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Estado</h4>
