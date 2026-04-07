@@ -1129,7 +1129,7 @@ export default function MaterialsPage() {
                       {material.available_quantity === 0 && material.next_available_date && (
                         <div className="flex items-center gap-1.5 text-[10px] text-amber-500 bg-amber-500/10 rounded-lg px-2.5 py-1.5">
                           <Clock className="h-3 w-3 flex-shrink-0" />
-                          <span>Disponible aprox. {new Date(material.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          <span>Disponible aprox. {new Date(material.next_available_date).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       )}
                       {material.available_quantity === 0 && !material.next_available_date && (
@@ -1324,7 +1324,7 @@ export default function MaterialsPage() {
                     {viewingMaterial.available_quantity === 0 && viewingMaterial.next_available_date && (
                       <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Disponible aprox. {new Date(viewingMaterial.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        Disponible aprox. {new Date(viewingMaterial.next_available_date).toLocaleString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
                     {viewingMaterial.available_quantity === 0 && !viewingMaterial.next_available_date && (
@@ -1632,7 +1632,7 @@ export default function MaterialsPage() {
                     {scannedMaterial.available_quantity === 0 && scannedMaterial.next_available_date && (
                       <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Disponible aprox. {new Date(scannedMaterial.next_available_date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        Disponible aprox. {new Date(scannedMaterial.next_available_date).toLocaleString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
                   </div>

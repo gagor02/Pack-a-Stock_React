@@ -278,7 +278,9 @@ export default function RequestsPage() {
                           Solicitud #{req.id} · {formatDate(req.created_at)}
                         </p>
                       </div>
-                      <Badge variant="warning" className="text-sm px-3 py-1">Pendiente</Badge>
+                      <span className="text-xs font-semibold text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-lg flex-shrink-0">
+                        #{req.id}
+                      </span>
                     </div>
 
                     {/* Materiales solicitados */}
@@ -387,7 +389,9 @@ export default function RequestsPage() {
                             Extensión #{ext.id} · Préstamo #{ext.loan} · {formatDate(ext.requested_at)}
                           </p>
                         </div>
-                        <Badge variant="warning" className="text-sm px-3 py-1">Pendiente</Badge>
+                        <span className="text-xs font-semibold text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-lg flex-shrink-0">
+                          #{ext.id}
+                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
