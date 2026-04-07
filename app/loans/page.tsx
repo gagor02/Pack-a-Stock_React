@@ -354,7 +354,7 @@ export default function LoansPage() {
           borrower: request.requester,
           material: item.material,
           quantity_loaned: item.quantity_requested,
-          expected_return_date: request.desired_return_date,
+          expected_return_date: request.desired_return_date ? request.desired_return_date.split('T')[0] : null,
           loan_request: request.id,
         })
       )
