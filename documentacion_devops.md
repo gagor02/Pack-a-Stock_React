@@ -254,19 +254,34 @@ Ambos pipelines siguen la misma secuencia de cinco fases:
 
 ### Descripción de los Jenkinsfiles
 
-**Backend Jenkinsfile:**
+**Backend Jenkinsfile (Scripted Pipeline):**
 ```groovy
-pipeline {
-  agent any
-  triggers { pollSCM('* * * * *') }
-  stages {
-    stage('Checkout') { steps { git branch: 'v02', url: '...' } }
-    stage('Copy') { steps { /* rsync/sftp archivos al servidor */ } }
-    stage('Deploy') { steps { sh 'ssh servidor docker compose restart backend' } }
-    stage('Health') { steps { sh 'curl -f https://packstock.198.71.54.179.nip.io/api/health/' } }
+node {
+  stage('Checkout') {
+    git branch: 'v02', url: 'https://github.com/Nyels1/Pack-a-Stock'
+  }
+  stage('Copy') {
+    sh 'rsync -a --delete --exclude=.git --exclude=__pycache__ \
+        --exclude=media --exclude=firebase-credentials.json \
+        $WORKSPACE/ /workspace/Pack-a-Stock/'
+  }
+  stage('Build') {
+    sh 'docker-compose -p pack-a-stock-prod -f /workspace/docker-compose.yml build backend'
+  }
+  stage('Security Scan') {
+    sh 'trivy image --severity HIGH,CRITICAL --exit-code 0 \
+        --format table pack-a-stock-prod-backend:latest 2>&1 | tail -30 || true'
+  }
+  stage('Deploy') {
+    sh 'docker-compose -p pack-a-stock-prod -f /workspace/docker-compose.yml up -d backend'
+  }
+  stage('Health') {
+    sh 'sleep 5 && docker exec pack_backend python manage.py check --deploy 2>&1 | tail -5 || true'
   }
 }
 ```
+
+> **Nota:** Se usa Scripted Pipeline (`node{}`) en lugar de Declarative Pipeline (`pipeline{}`) para evitar un bug conocido del plugin `pipeline-model-definition` en esta versión de Jenkins que generaba `NullPointerException` en el `DeclarativeJobPropertyTrackerAction`.
 
 **Frontend Jenkinsfile:**
 ```groovy
@@ -282,6 +297,32 @@ pipeline {
   }
 }
 ```
+
+### Escaneo de Seguridad con Trivy
+
+Trivy es un escáner de vulnerabilidades de código abierto desarrollado por Aqua Security. Se integra en el pipeline del backend como una fase dedicada entre el Build y el Deploy, analizando la imagen Docker construida en busca de vulnerabilidades conocidas (CVEs) en paquetes del sistema operativo y dependencias de Python.
+
+**Configuración en el pipeline del backend:**
+```groovy
+stage('Security Scan') {
+    steps {
+        sh '''trivy image \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format table \
+            pack-a-stock-prod-backend:latest 2>&1 | tail -30 || true'''
+    }
+}
+```
+
+**Parámetros utilizados:**
+- `--severity HIGH,CRITICAL`: Solo reporta vulnerabilidades de severidad alta y crítica, filtrando el ruido de vulnerabilidades menores.
+- `--exit-code 0`: El pipeline continúa aunque se encuentren vulnerabilidades (modo informativo). En un entorno más estricto se usaría `--exit-code 1` para detener el despliegue.
+- `--format table`: Salida en formato tabular legible en los logs de Jenkins.
+
+**Resultado típico:** Trivy genera una tabla con columnas Librería, Vulnerabilidad (CVE), Severidad, Versión instalada y Versión con el fix. Esta salida queda almacenada en los logs del job de Jenkins y puede exportarse como reporte HTML para auditorías.
+
+**Importancia en DevOps:** La integración de Trivy en el pipeline implementa el concepto de "shift-left security" — detectar problemas de seguridad lo más temprano posible en el ciclo de desarrollo, antes de que el código llegue a producción. Cada despliegue genera automáticamente un informe de vulnerabilidades sin intervención manual.
 
 ### Automatización con pollSCM
 
@@ -353,6 +394,33 @@ Certificados TLS generados con Certbot para el dominio `*.198.71.54.179.nip.io`.
 
 **Swap:**
 2GB de swap configurado para manejar picos de memoria sin causar OOM-killer en los procesos críticos.
+
+### Autenticación con Firebase (Google Sign-In)
+
+Como complemento a la autenticación JWT nativa, el sistema integra Firebase Authentication para permitir el inicio de sesión con cuentas de Google en las tres plataformas (web, móvil y backend).
+
+**Flujo de autenticación:**
+```
+Usuario → Google Sign-In popup → Firebase emite ID Token
+→ POST /api/auth/firebase/ { firebase_token }
+→ Backend verifica token con firebase-admin SDK
+→ Backend crea o recupera el usuario local
+→ Backend emite tokens JWT propios (access + refresh)
+→ Cliente almacena JWT y opera normalmente
+```
+
+Este diseño mantiene Firebase solo como proveedor de identidad — la autorización y multi-tenancy siguen siendo gestionados íntegramente por el backend Django, sin dependencia de Firebase en las rutas protegidas.
+
+**Componentes implementados:**
+
+| Componente | Tecnología | Detalle |
+|---|---|---|
+| Backend | `firebase-admin` Python SDK | Verifica ID tokens de Firebase contra el proyecto `packastock` |
+| Web | `firebase` JS SDK + `signInWithPopup` | Popup de Google, intercambia token con Django |
+| Móvil | `firebase_auth` + `google_sign_in` Flutter | Flujo nativo Android, intercambia token con Django |
+| Detección | Endpoint `POST /api/auth/check-method/` | Si un usuario intenta login con contraseña pero tiene cuenta Google, retorna `{uses_google: true}` y el cliente muestra un aviso guía |
+
+**Seguridad de credenciales:** El archivo `firebase-credentials.json` (service account) se monta en el contenedor backend como volumen de solo lectura (`:ro`) y está excluido del repositorio mediante `.dockerignore` y `.gitignore`. Nunca se incluye en la imagen Docker construida.
 
 ### Seguridad en Contenedores
 

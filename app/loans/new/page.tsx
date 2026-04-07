@@ -300,7 +300,7 @@ export default function NewLoanPage() {
     `${u.first_name} ${u.last_name}`.toLowerCase().includes(userSearchQuery.toLowerCase())
   )
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().slice(0, 16)
 
   return (
     <DashboardLayout>
@@ -576,10 +576,10 @@ export default function NewLoanPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Fecha de Devolución *
+                    Fecha y Hora de Devolución *
                   </label>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     value={returnDate}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReturnDate(e.target.value)}
                     min={today}

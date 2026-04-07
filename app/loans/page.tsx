@@ -354,7 +354,7 @@ export default function LoansPage() {
           borrower: request.requester,
           material: item.material,
           quantity_loaned: item.quantity_requested,
-          expected_return_date: request.desired_return_date ? request.desired_return_date.split('T')[0] : null,
+          expected_return_date: request.desired_return_date ?? null,
           loan_request: request.id,
         })
       )
@@ -409,10 +409,12 @@ export default function LoansPage() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/D'
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    return new Date(dateString).toLocaleString('es-ES', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     })
   }
 
@@ -1180,7 +1182,7 @@ export default function LoansPage() {
         {requestDetailModal.isOpen && requestDetailModal.request && (() => {
           const req = requestDetailModal.request
           const items = req.items || []
-          const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+          const fmt = (d?: string) => d ? new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
           const statusColors: Record<string, string> = {
             approved: 'text-green-400 bg-green-500/10 border-green-500/20',
             rejected: 'text-red-400 bg-red-500/10 border-red-500/20',
