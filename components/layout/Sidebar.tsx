@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { useNotifications } from '@/hooks/useNotifications'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { useCommandPaletteStore } from '@/store/commandPaletteStore'
 import {
   LayoutDashboard,
   Package,
@@ -25,6 +26,7 @@ import {
   Sun,
   LogOut,
   ShieldCheck,
+  Search,
 } from 'lucide-react'
 
 const navigation = [
@@ -107,6 +109,7 @@ export default function Sidebar() {
   const { user, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar, theme, toggleTheme } = useUIStore()
   const { badgeCounts } = useNotifications()
+  const { open: openPalette } = useCommandPaletteStore()
 
   const filteredNav = navigation.filter((item) =>
     user ? item.roles.includes(user.user_type) : false
@@ -202,6 +205,26 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border p-4 space-y-2">
+        {/* Command Palette trigger */}
+        <button
+          onClick={openPalette}
+          className={clsx(
+            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full',
+            sidebarCollapsed && 'justify-center'
+          )}
+          title="Buscar comandos (Ctrl+K)"
+        >
+          <Search className="h-5 w-5 flex-shrink-0" />
+          {!sidebarCollapsed && (
+            <>
+              <span className="flex-1 text-left">Buscar...</span>
+              <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                Ctrl K
+              </kbd>
+            </>
+          )}
+        </button>
+
         {/* Notification Bell */}
         <NotificationBell sidebarMode sidebarCollapsed={sidebarCollapsed} />
 

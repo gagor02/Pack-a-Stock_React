@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui'
 import {
   BarChart3, Download, FileText, Package, ArrowLeftRight, Users,
   Calendar, Search, AlertCircle, CheckCircle,
-  Activity, Star, Shield, Trash2, MapPin, Tag,
+  Activity, Star, Shield, Trash2, MapPin, Tag, Printer,
 } from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
@@ -55,7 +56,172 @@ const STATUS_LABELS: Record<string, string> = {
 const getStatusVariant = (s: string): any =>
   ({ active: 'success', approved: 'success', returned: 'default', pending: 'warning', rejected: 'danger', overdue: 'danger' }[s] || 'default')
 
+// ─── PDF / Print helper ───────────────────────────────────────────────────────
+function printReport(data: {
+  accountName: string
+  stats: any
+  filteredLoans: any[]
+  filteredMaterials: any[]
+  topBorrowers: any[]
+  dateFilter: string
+}) {
+  const { accountName, stats, filteredLoans, filteredMaterials, topBorrowers, dateFilter } = data
+  const dateLabel = dateFilter === 'week' ? 'última semana' : dateFilter === 'month' ? 'último mes' : 'todo el tiempo'
+  const now = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const statusLabel = (s: string) => ({ active: 'Activo', returned: 'Devuelto', overdue: 'Vencido', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', available: 'Disponible', in_use: 'En uso' }[s] ?? s)
+  const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
+
+  const loansRows = filteredLoans.slice(0, 50).map(l => `
+    <tr>
+      <td>${l.id}</td>
+      <td>${l.material_detail?.name ?? 'N/A'}</td>
+      <td>${l.borrower_detail?.full_name ?? 'N/A'}</td>
+      <td>${l.quantity_loaned ?? 1}</td>
+      <td>${fmtDate(l.issued_at ?? l.created_at)}</td>
+      <td>${fmtDate(l.expected_return_date)}</td>
+      <td class="status-${l.status}">${statusLabel(l.status)}</td>
+    </tr>`).join('')
+
+  const matsRows = filteredMaterials.slice(0, 50).map(m => `
+    <tr>
+      <td>${m.name}</td>
+      <td>${m.sku ?? 'N/A'}</td>
+      <td>${m.category?.name ?? 'Sin categoría'}</td>
+      <td>${m.available_quantity ?? 0} / ${m.quantity ?? 0}</td>
+      <td class="status-${m.status}">${statusLabel(m.status)}</td>
+      <td>${m.is_low_stock ? '⚠️ Sí' : 'No'}</td>
+    </tr>`).join('')
+
+  const borrowersRows = topBorrowers.slice(0, 10).map((b, i) => `
+    <tr>
+      <td>#${i + 1}</td>
+      <td>${b.name}</td>
+      <td>${b.count}</td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte Pack-a-Stock — ${accountName}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a2e; background: white; }
+    .page { padding: 32px 40px; max-width: 1000px; margin: 0 auto; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #7C3AED; padding-bottom: 16px; margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon { width: 44px; height: 44px; background: linear-gradient(135deg, #7C3AED, #A855F7); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 18px; }
+    .brand-name { font-size: 22px; font-weight: 800; color: #7C3AED; letter-spacing: -0.5px; }
+    .brand-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .report-meta { text-align: right; }
+    .report-meta .date { font-size: 12px; color: #6b7280; }
+    .report-meta .account { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-top: 4px; }
+    .report-meta .period { font-size: 11px; color: #7C3AED; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .section { margin-bottom: 28px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #7C3AED; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 12px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 4px; }
+    .kpi { background: #f8f7ff; border: 1px solid #e4e3f5; border-radius: 10px; padding: 14px 16px; }
+    .kpi-value { font-size: 28px; font-weight: 900; color: #7C3AED; line-height: 1; }
+    .kpi-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+    .kpi-sub { font-size: 11px; color: #374151; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    th { background: #7C3AED; color: white; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    tr:nth-child(even) { background: #fafafa; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; color: #374151; }
+    .status-active { color: #059669; font-weight: 600; }
+    .status-available { color: #059669; font-weight: 600; }
+    .status-returned { color: #6b7280; }
+    .status-overdue { color: #dc2626; font-weight: 700; }
+    .status-in_use { color: #d97706; font-weight: 600; }
+    .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; color: #9ca3af; font-size: 10px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="brand">
+      <div class="brand-icon">P</div>
+      <div>
+        <div class="brand-name">Pack-a-Stock</div>
+        <div class="brand-sub">Sistema de Gestión de Préstamos</div>
+      </div>
+    </div>
+    <div class="report-meta">
+      <div class="date">${now}</div>
+      <div class="account">${accountName}</div>
+      <div class="period">Período: ${dateLabel}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Resumen Ejecutivo</div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-value">${stats.materials.total}</div><div class="kpi-label">Materiales</div><div class="kpi-sub">${stats.materials.available} disponibles</div></div>
+      <div class="kpi"><div class="kpi-value">${stats.loans.total}</div><div class="kpi-label">Préstamos</div><div class="kpi-sub">${stats.loans.active} activos · ${stats.loans.overdue} vencidos</div></div>
+      <div class="kpi"><div class="kpi-value">${stats.requests.total}</div><div class="kpi-label">Solicitudes</div><div class="kpi-sub">${stats.requests.approved} aprobadas · ${stats.requests.pending} pendientes</div></div>
+      <div class="kpi"><div class="kpi-value">${stats.users.total}</div><div class="kpi-label">Usuarios</div><div class="kpi-sub">registrados en la cuenta</div></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="section">
+      <div class="section-title">Top Usuarios con Préstamos</div>
+      <table>
+        <thead><tr><th>#</th><th>Usuario</th><th>Préstamos</th></tr></thead>
+        <tbody>${borrowersRows || '<tr><td colspan="3" style="text-align:center;color:#9ca3af">Sin datos</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="section">
+      <div class="section-title">Estado de Solicitudes</div>
+      <table>
+        <thead><tr><th>Estado</th><th>Cantidad</th></tr></thead>
+        <tbody>
+          <tr><td class="status-active">Aprobadas</td><td>${stats.requests.approved}</td></tr>
+          <tr><td class="status-overdue">Rechazadas</td><td>${stats.requests.rejected ?? 0}</td></tr>
+          <tr><td style="color:#d97706;font-weight:600">Pendientes</td><td>${stats.requests.pending}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  ${filteredLoans.length > 0 ? `
+  <div class="section" style="page-break-before: always;">
+    <div class="section-title">Historial de Préstamos (${Math.min(filteredLoans.length, 50)} de ${filteredLoans.length})</div>
+    <table>
+      <thead><tr><th>ID</th><th>Material</th><th>Usuario</th><th>Cant.</th><th>Fecha</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+      <tbody>${loansRows}</tbody>
+    </table>
+  </div>` : ''}
+
+  ${filteredMaterials.length > 0 ? `
+  <div class="section" style="page-break-before: always;">
+    <div class="section-title">Inventario de Materiales (${Math.min(filteredMaterials.length, 50)} de ${filteredMaterials.length})</div>
+    <table>
+      <thead><tr><th>Nombre</th><th>SKU</th><th>Categoría</th><th>Stock (disp/total)</th><th>Estado</th><th>Stock bajo</th></tr></thead>
+      <tbody>${matsRows}</tbody>
+    </table>
+  </div>` : ''}
+
+  <div class="footer">
+    <span>Pack-a-Stock · Generado el ${now}</span>
+    <span>packstock.198.71.54.179.nip.io</span>
+  </div>
+</div>
+</body>
+</html>`
+
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+  win.addEventListener('load', () => { win.print() })
+}
+
 export default function ReportsPage() {
+  const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
   const [search, setSearch] = useState('')
@@ -331,6 +497,23 @@ export default function ReportsPage() {
               <p className="text-sm text-muted-foreground">Análisis completo · rastreo de personas y pedidos</p>
             </div>
           </div>
+          <div className="flex items-center gap-3 flex-wrap">
+          {/* PDF export */}
+          <button
+            onClick={() => printReport({
+              accountName: (user as any)?.account?.name ?? (user as any)?.full_name ?? 'Mi empresa',
+              stats,
+              filteredLoans,
+              filteredMaterials,
+              topBorrowers,
+              dateFilter,
+            })}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+          >
+            <Printer className="h-4 w-4" />
+            Exportar PDF
+          </button>
+
           {/* Date filter pills */}
           <div className="flex items-center gap-2 p-1 bg-secondary/40 rounded-xl border border-border/50">
             <Calendar className="h-4 w-4 text-muted-foreground ml-2" />
@@ -341,6 +524,7 @@ export default function ReportsPage() {
               </button>
             ))}
           </div>
+        </div>
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
