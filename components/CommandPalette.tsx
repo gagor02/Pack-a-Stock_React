@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Package, Tags, MapPin, ArrowLeftRight,
   Inbox, Users, BarChart3, Settings, QrCode, CreditCard,
   Search, FileText, X, ChevronRight, ShieldCheck, Printer,
-  Moon, Sun, LogOut,
+  Moon, Sun, LogOut, Tv2,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 
@@ -31,6 +31,7 @@ interface CommandContext {
   close: () => void
   toggleTheme: () => void
   logout: () => void
+  setKioskMode: (on: boolean) => void
 }
 
 const ALL_COMMANDS: Command[] = [
@@ -50,6 +51,7 @@ const ALL_COMMANDS: Command[] = [
   // ─ Acciones
   { id: 'new-loan', label: 'Nuevo Préstamo', description: 'Crear un préstamo manual', icon: ArrowLeftRight, group: 'Acciones', roles: ['inventarista'], action: ({ router, close }) => { router.push('/loans/new'); close() } },
   { id: 'print-report', label: 'Exportar PDF', description: 'Ir a Reportes y exportar como PDF', icon: Printer, group: 'Acciones', roles: ['inventarista'], action: ({ router, close }) => { router.push('/reports?action=pdf'); close() } },
+  { id: 'kiosk', label: 'Modo Kiosco', description: 'Pantalla completa para proyectar en TV', icon: Tv2, group: 'Acciones', roles: ['inventarista'], action: ({ setKioskMode, close }) => { setKioskMode(true); close() } },
   { id: 'print-labels', label: 'Imprimir Etiquetas QR', description: 'Ir a la sección de etiquetas', icon: FileText, group: 'Acciones', roles: ['inventarista'], action: ({ router, close }) => { router.push('/labels'); close() } },
   // ─ Sistema
   { id: 'toggle-theme', label: 'Cambiar tema', description: 'Alternar entre claro y oscuro', icon: Moon, group: 'Sistema', action: ({ toggleTheme, close }) => { toggleTheme(); close() } },
@@ -71,7 +73,7 @@ function matches(cmd: Command, query: string): boolean {
 export default function CommandPalette() {
   const { isOpen, close } = useCommandPaletteStore()
   const { user, logout: storeLogout } = useAuthStore()
-  const { toggleTheme, theme } = useUIStore()
+  const { toggleTheme, theme, setKioskMode } = useUIStore()
   const router = useRouter()
 
   const [query, setQuery] = useState('')
@@ -97,6 +99,7 @@ export default function CommandPalette() {
     close,
     toggleTheme,
     logout: () => { storeLogout(); router.push('/login'); close() },
+    setKioskMode,
   }
 
   const runCommand = useCallback(

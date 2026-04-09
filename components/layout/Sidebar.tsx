@@ -27,6 +27,7 @@ import {
   LogOut,
   ShieldCheck,
   Search,
+  Tv2,
 } from 'lucide-react'
 
 const navigation = [
@@ -110,6 +111,7 @@ export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, theme, toggleTheme } = useUIStore()
   const { badgeCounts } = useNotifications()
   const { open: openPalette } = useCommandPaletteStore()
+  const { setKioskMode } = useUIStore()
 
   const filteredNav = navigation.filter((item) =>
     user ? item.roles.includes(user.user_type) : false
@@ -205,6 +207,22 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border p-4 space-y-2">
+        {/* Kiosk mode — inventaristas only */}
+        {user?.user_type === 'inventarista' && (
+          <button
+            onClick={() => setKioskMode(true)}
+            className={clsx(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors w-full',
+              'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20',
+              sidebarCollapsed && 'justify-center'
+            )}
+            title="Modo Kiosco"
+          >
+            <Tv2 className="h-5 w-5 flex-shrink-0" />
+            {!sidebarCollapsed && <span className="flex-1 text-left">Modo Kiosco</span>}
+          </button>
+        )}
+
         {/* Command Palette trigger */}
         <button
           onClick={openPalette}

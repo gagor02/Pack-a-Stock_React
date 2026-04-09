@@ -4,10 +4,12 @@ import { persist } from 'zustand/middleware'
 interface UIState {
   theme: 'light' | 'dark'
   sidebarCollapsed: boolean
+  kioskMode: boolean
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
+  setKioskMode: (on: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -15,6 +17,7 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       theme: 'light',
       sidebarCollapsed: false,
+      kioskMode: false,
 
       setTheme: (theme) => {
         set({ theme })
@@ -48,6 +51,8 @@ export const useUIStore = create<UIState>()(
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+
+      setKioskMode: (on) => set({ kioskMode: on }),
     }),
     {
       name: 'ui-storage',

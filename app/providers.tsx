@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import { useState, useEffect } from 'react'
 import { useCommandPaletteStore } from '@/store/commandPaletteStore'
 import CommandPalette from '@/components/CommandPalette'
+import KioskMode from '@/components/KioskMode'
 
 function KeyboardShortcuts() {
   const { toggle } = useCommandPaletteStore()
@@ -39,6 +40,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <KeyboardShortcuts />
       {children}
       <CommandPalette />
+      <KioskMode />
       <Toaster position="top-right" />
     </QueryClientProvider>
   )
