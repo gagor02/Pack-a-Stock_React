@@ -39,12 +39,6 @@ const navigation = [
     roles: ['inventarista', 'employee'],
   },
   {
-    name: 'Materiales',
-    href: '/materials',
-    icon: Package,
-    roles: ['inventarista', 'employee'],
-  },
-  {
     name: 'Categorías',
     href: '/categories',
     icon: Tags,
@@ -54,6 +48,12 @@ const navigation = [
     name: 'Ubicaciones',
     href: '/locations',
     icon: MapPin,
+    roles: ['inventarista', 'employee'],
+  },
+  {
+    name: 'Materiales',
+    href: '/materials',
+    icon: Package,
     roles: ['inventarista', 'employee'],
   },
   {

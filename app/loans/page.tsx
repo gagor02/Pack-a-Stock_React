@@ -42,7 +42,7 @@ import { useQuery } from '@tanstack/react-query'
 import BiometricVerificationModal from '@/components/biometrics/BiometricVerificationModal'
 import { requiresBiometricVerification } from '@/lib/biometrics'
 
-type TabKey = 'activos' | 'devoluciones' | 'historial'
+type TabKey = 'activos' | 'historial'
 
 interface ReturnModalState {
   isOpen: boolean
@@ -87,6 +87,7 @@ export default function LoansPage() {
   const isInventarista = user?.user_type === 'inventarista'
 
   const [activeTab, setActiveTab] = useState<TabKey>('activos')
+  const [historialFilter, setHistorialFilter] = useState<'all' | 'loans' | 'requests'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [returnModal, setReturnModal] = useState<ReturnModalState>({
     isOpen: false,
@@ -171,6 +172,7 @@ export default function LoansPage() {
   const activeCount = activeLoans.filter((l: any) => l.status === 'active').length
   const overdueCount = activeLoans.filter((l: any) => l.status === 'overdue').length
   const returnedCount = historyLoans.length
+  const pendingExtensions = extensions.filter((e: any) => e.status === 'pending')
 
   // Filtro de búsqueda
   const filterBySearch = (items: any[]) => {
@@ -481,7 +483,7 @@ export default function LoansPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card className="p-5 rounded-xl border-2 border-border/50">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-green-500/10">
@@ -506,6 +508,17 @@ export default function LoansPage() {
           </Card>
           <Card className="p-5 rounded-xl border-2 border-border/50">
             <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10">
+                <Clock className="h-6 w-6 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-foreground">{pendingExtensions.length}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Extensiones</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-5 rounded-xl border-2 border-border/50">
+            <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-blue-500/10">
                 <RotateCcw className="h-6 w-6 text-blue-500" />
               </div>
@@ -520,8 +533,7 @@ export default function LoansPage() {
         {/* Tabs */}
         <div className="flex gap-2 p-1.5 bg-secondary/30 rounded-xl">
           {[
-            { key: 'activos' as TabKey, label: 'Activos', icon: Package, count: activeLoans.length },
-            { key: 'devoluciones' as TabKey, label: 'Devoluciones', icon: RotateCcw, count: activeLoans.length },
+            { key: 'activos' as TabKey, label: 'En curso', icon: Package, count: activeLoans.length + pendingExtensions.length },
             { key: 'historial' as TabKey, label: 'Historial', icon: History, count: historyLoans.length + historyRequests.length },
           ].map((tab) => {
             const Icon = tab.icon
@@ -562,31 +574,29 @@ export default function LoansPage() {
           />
         </div>
 
-        {/* ====== TAB ACTIVOS ====== */}
+        {/* ====== TAB EN CURSO ====== */}
         {activeTab === 'activos' && (
           <>
             {isLoading ? <Spinner /> : (
               <div className="space-y-5">
                 {/* Extensiones pendientes */}
-                {extensions.filter((e: any) => e.status === 'pending').length > 0 && isInventarista && (
+                {isInventarista && pendingExtensions.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-500/10 rounded-lg">
-                        <Clock className="h-5 w-5 text-blue-500" />
+                      <div className="p-2 bg-amber-500/10 rounded-lg">
+                        <Clock className="h-5 w-5 text-amber-500" />
                       </div>
-                      <h2 className="text-lg font-bold text-foreground">Extensiones pendientes</h2>
-                      <Badge variant="warning" className="text-sm px-3 py-1">
-                        {extensions.filter((e: any) => e.status === 'pending').length}
-                      </Badge>
+                      <h2 className="text-lg font-bold text-foreground">Extensiones de plazo</h2>
+                      <Badge variant="warning" className="text-sm px-3 py-1">{pendingExtensions.length}</Badge>
                     </div>
                     <div className="space-y-4">
-                      {extensions.filter((e: any) => e.status === 'pending').map((ext: any) => (
-                        <Card key={`ext-${ext.id}`} className="border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-300">
+                      {pendingExtensions.map((ext: any) => (
+                        <Card key={`ext-${ext.id}`} className="border-l-4 border-l-amber-500 hover:shadow-lg transition-all duration-300">
                           <CardContent className="p-0">
                             <div className="flex flex-col gap-4 p-5">
                               <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-blue-500/10">
-                                  <Clock className="h-5 w-5 text-blue-500" />
+                                <div className="p-2.5 rounded-xl bg-amber-500/10">
+                                  <Clock className="h-5 w-5 text-amber-500" />
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <h3 className="text-base font-bold text-foreground">
@@ -642,68 +652,8 @@ export default function LoansPage() {
                       </Badge>
                     </div>
                     {filterBySearch(activeLoans).filter((l: any) => l.status === 'overdue').map((loan: any) => (
-                      <LoanCard
-                        key={`loan-${loan.id}`}
-                        loan={loan}
-                        formatDate={formatDate}
-                        getStatusBadgeVariant={getStatusBadgeVariant}
-                        getStatusLabel={getStatusLabel}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Activos */}
-                {filterBySearch(activeLoans).filter((l: any) => l.status === 'active').length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-500/10 rounded-lg">
-                        <Package className="h-5 w-5 text-green-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">En circulacion</h2>
-                    </div>
-                    {filterBySearch(activeLoans).filter((l: any) => l.status === 'active').map((loan: any) => (
-                      <LoanCard
-                        key={`loan-${loan.id}`}
-                        loan={loan}
-                        formatDate={formatDate}
-                        getStatusBadgeVariant={getStatusBadgeVariant}
-                        getStatusLabel={getStatusLabel}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {filterBySearch(activeLoans).length === 0 && extensions.filter((e: any) => e.status === 'pending').length === 0 && (
-                  <EmptyState message="No hay prestamos activos en este momento" icon={Package} />
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ====== TAB DEVOLUCIONES ====== */}
-        {activeTab === 'devoluciones' && (
-          <>
-            {isLoading ? <Spinner /> : filterBySearch(activeLoans).length === 0 ? (
-              <EmptyState message="No hay prestamos pendientes de devolucion" icon={RotateCcw} />
-            ) : (
-              <div className="space-y-5">
-                {/* Vencidos primero */}
-                {filterBySearch(activeLoans).filter((l: any) => l.status === 'overdue').length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-500/10 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">Vencidos</h2>
-                      <Badge variant="danger" className="text-sm px-3 py-1">
-                        {activeLoans.filter((l: any) => l.status === 'overdue').length}
-                      </Badge>
-                    </div>
-                    {filterBySearch(activeLoans).filter((l: any) => l.status === 'overdue').map((loan: any) => (
                       <LoanReturnCard
-                        key={`ret-${loan.id}`}
+                        key={`loan-${loan.id}`}
                         loan={loan}
                         isInventarista={isInventarista}
                         onReturn={() => handleOpenReturnModal(loan.id)}
@@ -721,11 +671,11 @@ export default function LoansPage() {
                       <div className="p-2 bg-green-500/10 rounded-lg">
                         <Package className="h-5 w-5 text-green-500" />
                       </div>
-                      <h2 className="text-lg font-bold text-foreground">Activos</h2>
+                      <h2 className="text-lg font-bold text-foreground">En circulacion</h2>
                     </div>
                     {filterBySearch(activeLoans).filter((l: any) => l.status === 'active').map((loan: any) => (
                       <LoanReturnCard
-                        key={`ret-${loan.id}`}
+                        key={`loan-${loan.id}`}
                         loan={loan}
                         isInventarista={isInventarista}
                         onReturn={() => handleOpenReturnModal(loan.id)}
@@ -734,6 +684,10 @@ export default function LoansPage() {
                       />
                     ))}
                   </div>
+                )}
+
+                {filterBySearch(activeLoans).length === 0 && pendingExtensions.length === 0 && (
+                  <EmptyState message="No hay prestamos activos en este momento" icon={Package} />
                 )}
               </div>
             )}
@@ -745,12 +699,38 @@ export default function LoansPage() {
           <>
             {isLoading ? <Spinner /> : (
               <div className="space-y-5">
-                {filterBySearch([...historyRequests, ...historyLoans]).length === 0 ? (
+                {/* Filtros */}
+                {(historyRequests.length > 0 || historyLoans.length > 0) && (
+                  <div className="flex gap-2">
+                    {([
+                      { key: 'all', label: 'Todos' },
+                      { key: 'loans', label: 'Prestamos' },
+                      { key: 'requests', label: 'Solicitudes' },
+                    ] as const).map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => setHistorialFilter(f.key)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          historialFilter === f.key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary/30 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterBySearch([
+                  ...(historialFilter !== 'loans' ? historyRequests : []),
+                  ...(historialFilter !== 'requests' ? historyLoans : []),
+                ]).length === 0 ? (
                   <EmptyState message="No hay historial de prestamos aun" icon={History} />
                 ) : (
                   <>
                     {/* Solicitudes procesadas */}
-                    {filterBySearch(historyRequests).map((req: any) => {
+                    {historialFilter !== 'loans' && filterBySearch(historyRequests).map((req: any) => {
                       const items = req.items || []
                       const itemNames = items.map((i: any) => i.material_detail?.name || `Material #${i.material}`).join(', ')
                       const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity_requested || 0), 0)
@@ -808,7 +788,7 @@ export default function LoansPage() {
                     })}
 
                     {/* Préstamos completados/devueltos */}
-                    {filterBySearch(historyLoans).map((loan: any) => (
+                    {historialFilter !== 'requests' && filterBySearch(historyLoans).map((loan: any) => (
                       <Card key={`loan-h-${loan.id}`} className={`border-l-4 ${getStatusColor(loan.status)} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
                         <CardContent className="p-0">
                           <div className="flex flex-col gap-3 p-5">
@@ -1366,65 +1346,46 @@ export default function LoansPage() {
   )
 }
 
-// ---- Card compacta para tab Activos ----
-function LoanCard({
-  loan,
-  formatDate,
-  getStatusBadgeVariant,
-  getStatusLabel,
-}: {
-  loan: any
-  formatDate: (d?: string) => string
-  getStatusBadgeVariant: (s: string) => any
-  getStatusLabel: (s: string) => string
-}) {
-  const isOverdue = loan.status === 'overdue'
+// ---- Helpers de countdown ----
+function getDaysUntil(dateString?: string): number {
+  if (!dateString) return 0
+  return Math.ceil((new Date(dateString).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+}
 
+function CountdownPill({ days }: { days: number }) {
+  if (days < 0) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400">
+        <AlertTriangle className="h-3 w-3" />
+        Vencido hace {Math.abs(days)} {Math.abs(days) === 1 ? 'dia' : 'dias'}
+      </span>
+    )
+  }
+  if (days === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400">
+        <Clock className="h-3 w-3" />
+        Vence hoy
+      </span>
+    )
+  }
+  if (days <= 3) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-400">
+        <Clock className="h-3 w-3" />
+        Vence en {days} {days === 1 ? 'dia' : 'dias'}
+      </span>
+    )
+  }
   return (
-    <Card className={`border-l-4 ${isOverdue ? 'border-l-red-500' : 'border-l-green-500'} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
-      <CardContent className="p-0">
-        <div className="flex flex-col gap-3 p-5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${isOverdue ? 'bg-destructive/10' : 'bg-green-500/10'}`}>
-              {isOverdue ? (
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              ) : (
-                <Package className="h-5 w-5 text-green-500" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-base font-bold text-foreground truncate">
-                {loan.material_detail?.name || `Material #${loan.material}`}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {loan.borrower_detail?.full_name || 'N/D'} · x{loan.quantity_loaned}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Badge variant={getStatusBadgeVariant(loan.status)} className="text-sm px-3 py-1">
-                {getStatusLabel(loan.status)}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              Devolver: {formatDate(loan.expected_return_date)}
-            </span>
-            {loan.days_until_return !== undefined && (
-              <span className={`flex items-center gap-1 ${isOverdue ? 'text-destructive font-medium' : ''}`}>
-                <Clock className="h-3.5 w-3.5" />
-                {loan.days_until_return} dias
-              </span>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-500/15 text-green-400">
+      <Clock className="h-3 w-3" />
+      Vence en {days} dias
+    </span>
   )
 }
 
-// ---- Card con acciones para tab Devoluciones ----
+// ---- Card con acciones ----
 function LoanReturnCard({
   loan,
   isInventarista,
@@ -1439,73 +1400,63 @@ function LoanReturnCard({
   formatDate: (d?: string) => string
 }) {
   const isOverdue = loan.status === 'overdue'
+  const days = getDaysUntil(loan.expected_return_date)
+  const sku = loan.material_detail?.sku
 
   return (
-    <Card className={`border-l-4 ${isOverdue ? 'border-l-red-500 border-2 border-destructive/30' : 'border-l-green-500'} hover:shadow-xl transition-all duration-300 overflow-hidden`}>
+    <Card className={`border-l-4 ${isOverdue ? 'border-l-red-500' : 'border-l-green-500'} hover:shadow-lg transition-all duration-300 overflow-hidden`}>
       <CardContent className="p-0">
         <div className="flex flex-col gap-4 p-5">
-          <div className="flex-1 min-w-0">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`p-2.5 rounded-xl ${isOverdue ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                {isOverdue ? (
-                  <AlertTriangle className="h-6 w-6 text-destructive" />
-                ) : (
-                  <Package className="h-6 w-6 text-primary" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-foreground">
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <div className={`p-2.5 rounded-xl flex-shrink-0 ${isOverdue ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+              {isOverdue ? (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              ) : (
+                <Package className="h-5 w-5 text-primary" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-foreground">
                   {loan.material_detail?.name || `Material #${loan.material}`}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {loan.borrower_detail?.full_name || loan.borrower_detail?.email || 'N/D'}
-                </p>
+                {sku && (
+                  <span className="text-xs text-muted-foreground bg-secondary/40 px-2 py-0.5 rounded-md font-mono">{sku}</span>
+                )}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant={isOverdue ? 'danger' : 'success'} className="text-sm px-3 py-1">
-                  {isOverdue ? 'Vencido' : 'Activo'}
-                </Badge>
-              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {loan.borrower_detail?.full_name || loan.borrower_detail?.email || 'N/D'}
+              </p>
             </div>
+            <div className="flex-shrink-0">
+              <CountdownPill days={days} />
+            </div>
+          </div>
 
-            {/* Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Package className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
-                  <p className="text-base font-medium text-foreground">x{loan.quantity_loaned}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Calendar className="h-4 w-4 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolver</p>
-                  <p className="text-base font-medium text-foreground">{formatDate(loan.expected_return_date)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-secondary/20 rounded-xl">
-                <div className={`p-2 rounded-lg ${isOverdue ? 'bg-destructive/10' : 'bg-green-500/10'}`}>
-                  <Clock className={`h-4 w-4 ${isOverdue ? 'text-destructive' : 'text-green-400'}`} />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Tiempo</p>
-                  <p className={`text-base font-medium ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                    {loan.days_until_return} dias
-                  </p>
-                </div>
-              </div>
+          {/* Details */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 bg-secondary/20 rounded-xl">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cantidad</p>
+              <p className="text-base font-medium text-foreground mt-0.5">x{loan.quantity_loaned}</p>
+            </div>
+            <div className="p-3 bg-secondary/20 rounded-xl">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Inicio</p>
+              <p className="text-sm font-medium text-foreground mt-0.5">
+                {loan.issued_at ? new Date(loan.issued_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : 'N/D'}
+              </p>
+            </div>
+            <div className="p-3 bg-secondary/20 rounded-xl">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Devolver</p>
+              <p className="text-sm font-medium text-foreground mt-0.5">
+                {loan.expected_return_date ? new Date(loan.expected_return_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/D'}
+              </p>
             </div>
           </div>
 
           {/* Actions */}
           {isInventarista && !loan.is_consumable_loan && (
-            <div className={`grid ${isOverdue ? 'grid-cols-2' : 'grid-cols-1'} gap-3 w-full pt-2 border-t border-border/30 mt-2`}>
+            <div className={`grid ${isOverdue ? 'grid-cols-2' : 'grid-cols-1'} gap-3 pt-2 border-t border-border/30`}>
               <Button onClick={onReturn} variant="primary" size="lg" className="w-full text-base py-3">
                 <RotateCcw className="h-5 w-5 mr-2" />
                 Registrar Devolucion
