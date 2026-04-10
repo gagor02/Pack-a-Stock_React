@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Search,
   Tv2,
+  CalendarClock,
 } from 'lucide-react'
 
 const navigation = [
@@ -72,6 +73,12 @@ const navigation = [
     href: '/loans',
     icon: ArrowLeftRight,
     roles: ['inventarista', 'employee'],
+  },
+  {
+    name: 'Devoluciones',
+    href: '/devoluciones',
+    icon: CalendarClock,
+    roles: ['inventarista'],
   },
   {
     name: 'Usuarios',
