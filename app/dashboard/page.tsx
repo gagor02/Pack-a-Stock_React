@@ -11,7 +11,7 @@ import Link from 'next/link'
 import {
   Package, ArrowLeftRight, FileText, Users,
   AlertTriangle, Clock, Bell,
-  ArrowRight, Building2, ChevronRight, Star, Copy, Check,
+  ArrowRight, Building2, ChevronRight, Star, Copy, Check, CalendarClock,
 } from 'lucide-react'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -132,6 +132,27 @@ export default function DashboardPage() {
     { name: 'En Uso', value: stats.materials.inUse, color: '#8b5cf6' },
     { name: 'Stock Bajo', value: stats.materials.lowStock, color: '#f59e0b' },
   ].filter(d => d.value > 0), [stats.materials])
+
+  const upcomingReturns = useMemo(() => {
+    const active = loans.filter((l: any) => l.status === 'active' || l.status === 'overdue')
+    return active
+      .map((l: any) => {
+        const due = new Date(l.expected_return_date)
+        const diffMs = due.getTime() - now.getTime()
+        const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+        return {
+          id: l.id,
+          material: l.material_detail?.name || 'Material',
+          borrower: l.borrower_detail?.full_name || 'Usuario',
+          days,
+          due,
+          isOverdue: days < 0,
+          isUrgent: days >= 0 && days <= 3,
+        }
+      })
+      .sort((a: any, b: any) => a.days - b.days)
+      .slice(0, 6)
+  }, [loans, now])
 
   const recentActivity = useMemo(() => {
     const all: any[] = [
@@ -406,41 +427,40 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Estado de Materiales — barras horizontales */}
+          {/* Proximas Devoluciones */}
           <div className="col-span-5 bg-card border border-border/50 rounded-xl overflow-hidden flex flex-col h-full">
-            <div className="flex items-center gap-2 px-4 py-2 border-b border-border/20 flex-shrink-0">
-              <Package className="h-3.5 w-3.5 text-primary" />
-              <p className="text-sm font-semibold text-foreground">Estado de Materiales</p>
-            </div>
-            <div className="flex flex-col justify-center flex-1 px-5 py-3 gap-3">
-              {[
-                { label: 'Disponibles', value: stats.materials.available, color: '#22c55e' },
-                { label: 'En Uso',      value: stats.materials.inUse,    color: '#8b5cf6' },
-                { label: 'Stock Bajo',  value: stats.materials.lowStock, color: '#f59e0b' },
-              ].map(({ label, value, color }) => {
-                const pct = stats.materials.total > 0 ? Math.round((value / stats.materials.total) * 100) : 0
-                return (
-                  <div key={label}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-xs text-muted-foreground">{label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-foreground">{value}</span>
-                        <span className="text-[11px] text-muted-foreground w-8 text-right">{pct}%</span>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-secondary/50 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
-                    </div>
-                  </div>
-                )
-              })}
-              <div className="pt-2 border-t border-border/20 flex justify-between text-xs">
-                <span className="text-muted-foreground">Total inventario</span>
-                <span className="font-bold text-foreground">{stats.materials.total}</span>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border/20 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-3.5 w-3.5 text-primary" />
+                <p className="text-sm font-semibold text-foreground">Proximas Devoluciones</p>
               </div>
+              <Link href="/loans" className="text-xs text-primary hover:underline flex items-center gap-1">
+                Ver todo <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-border/20 flex-1 overflow-hidden">
+              {upcomingReturns.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-4 text-center">Sin prestamos activos</p>
+              ) : upcomingReturns.map((item: any) => (
+                <div key={item.id} className="flex items-center gap-3 px-4 py-2 hover:bg-secondary/10 transition-colors">
+                  <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${
+                    item.isOverdue ? 'bg-red-500' : item.isUrgent ? 'bg-amber-500' : 'bg-border'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{item.material}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{item.borrower}</p>
+                  </div>
+                  <div className={`text-right flex-shrink-0 text-xs font-bold ${
+                    item.isOverdue ? 'text-red-400' : item.isUrgent ? 'text-amber-400' : 'text-muted-foreground'
+                  }`}>
+                    {item.isOverdue
+                      ? `${Math.abs(item.days)}d vencido`
+                      : item.days === 0
+                      ? 'Hoy'
+                      : `${item.days}d`}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
