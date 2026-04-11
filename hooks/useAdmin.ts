@@ -50,3 +50,34 @@ export function useAdminUsers() {
     staleTime: 30000,
   })
 }
+
+export function useAdminToggleUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action }: { id: number; action: 'block' | 'unblock' }) =>
+      adminService.toggleUser(id, action),
+    onSuccess: (_, { action }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
+      toast.success(action === 'block' ? 'Usuario bloqueado' : 'Usuario desbloqueado')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al cambiar estado del usuario')
+    },
+  })
+}
+
+export function useAdminDeleteAccount() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => adminService.deleteAccount(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
+      toast.success('Cuenta eliminada')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al eliminar cuenta')
+    },
+  })
+}

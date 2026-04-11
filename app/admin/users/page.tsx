@@ -6,10 +6,11 @@ import { useAuthStore } from '@/store/authStore'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { Card, CardContent } from '@/components/ui'
 import { Badge } from '@/components/ui'
+import { Button } from '@/components/ui'
 import {
-  Users, Search, Shield, User, Building2, Calendar, Ban,
+  Users, Search, Shield, User, Building2, Calendar, Ban, CheckCircle,
 } from 'lucide-react'
-import { useAdminUsers } from '@/hooks/useAdmin'
+import { useAdminUsers, useAdminToggleUser } from '@/hooks/useAdmin'
 
 export default function AdminUsersPage() {
   const router = useRouter()
@@ -24,6 +25,7 @@ export default function AdminUsersPage() {
   }, [router, user])
 
   const { data: users = [], isLoading } = useAdminUsers()
+  const toggleMutation = useAdminToggleUser()
 
   const filteredUsers = users.filter((u: any) => {
     const matchesSearch =
@@ -159,6 +161,35 @@ export default function AdminUsersPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Actions */}
+                      {!u.is_superuser && (
+                        <div className="pt-2 border-t border-border/30">
+                          {u.is_active ? (
+                            <Button
+                              variant="destructive"
+                              size="lg"
+                              className="w-full text-base py-3"
+                              disabled={toggleMutation.isPending}
+                              onClick={() => toggleMutation.mutate({ id: u.id, action: 'block' })}
+                            >
+                              <Ban className="h-5 w-5 mr-2" />
+                              Bloquear usuario
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              size="lg"
+                              className="w-full text-base py-3 border-green-500/30 text-green-400 hover:bg-green-500/10"
+                              disabled={toggleMutation.isPending}
+                              onClick={() => toggleMutation.mutate({ id: u.id, action: 'unblock' })}
+                            >
+                              <CheckCircle className="h-5 w-5 mr-2" />
+                              Desbloquear usuario
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

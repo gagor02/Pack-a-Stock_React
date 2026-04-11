@@ -53,6 +53,16 @@ export const adminService = {
     const { data } = await api.get('/admin/users/')
     return data.data
   },
+
+  toggleUser: async (id: number, action: 'block' | 'unblock') => {
+    const { data } = await api.post(`/admin/users/${id}/toggle/`, { action })
+    return data
+  },
+
+  deleteAccount: async (id: number) => {
+    const { data } = await api.delete(`/admin/accounts/${id}/delete/`)
+    return data
+  },
 }
 
 export default adminService

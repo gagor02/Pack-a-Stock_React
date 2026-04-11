@@ -15,6 +15,7 @@ export default function AdminPaymentsPage() {
   const router = useRouter()
   const { user } = useAuthStore()
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -24,11 +25,16 @@ export default function AdminPaymentsPage() {
 
   const { data: payments = [], isLoading } = useAdminPayments()
 
-  const filteredPayments = payments.filter((p: any) =>
-    p.account_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.card_holder_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.plan_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredPayments = payments.filter((p: any) => {
+    const matchesSearch =
+      p.account_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.card_holder_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.plan_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === '' ? true : p.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  const totalFiltered = filteredPayments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || 0), 0)
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('es-MX', {
@@ -61,17 +67,37 @@ export default function AdminPaymentsPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar por empresa, titular o plan..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-          />
+        {/* Search + Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por empresa, titular o plan..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-xl border-2 border-border bg-card px-5 py-3.5 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors sm:w-52"
+          >
+            <option value="">Todos los estados</option>
+            <option value="completed">Completados</option>
+            <option value="failed">Fallidos</option>
+            <option value="refunded">Reembolsados</option>
+          </select>
         </div>
+
+        {/* Summary */}
+        {filteredPayments.length > 0 && (
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm text-muted-foreground">{filteredPayments.length} pago{filteredPayments.length !== 1 ? 's' : ''}</p>
+            <p className="text-sm font-medium text-foreground">Total: <span className="text-green-400 font-bold">${totalFiltered.toFixed(2)} USD</span></p>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">

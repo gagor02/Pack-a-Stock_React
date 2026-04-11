@@ -9,9 +9,9 @@ import { Button } from '@/components/ui'
 import { Badge } from '@/components/ui'
 import {
   Building2, Users, MapPin, CreditCard, Search,
-  Edit2, X, Check, Calendar,
+  Edit2, X, Check, Calendar, Trash2,
 } from 'lucide-react'
-import { useAdminAccounts, useAdminUpdateAccount } from '@/hooks/useAdmin'
+import { useAdminAccounts, useAdminUpdateAccount, useAdminDeleteAccount } from '@/hooks/useAdmin'
 
 export default function AdminAccountsPage() {
   const router = useRouter()
@@ -28,6 +28,12 @@ export default function AdminAccountsPage() {
 
   const { data: accounts = [], isLoading } = useAdminAccounts()
   const updateMutation = useAdminUpdateAccount()
+  const deleteMutation = useAdminDeleteAccount()
+
+  const handleDelete = (account: any) => {
+    if (!confirm(`Eliminar la cuenta "${account.company_name}" y todos sus datos? Esta accion no se puede deshacer.`)) return
+    deleteMutation.mutate(account.id)
+  }
 
   const filteredAccounts = accounts.filter((acc: any) =>
     acc.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -235,10 +241,20 @@ export default function AdminAccountsPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="pt-2 border-t border-border/30 mt-2">
+                      <div className="pt-2 border-t border-border/30 mt-2 grid grid-cols-2 gap-3">
                         <Button onClick={() => handleEdit(account)} variant="secondary" size="lg" className="w-full text-base py-3">
                           <Edit2 className="h-5 w-5 mr-2" />
-                          Editar Cuenta
+                          Editar
+                        </Button>
+                        <Button
+                          onClick={() => handleDelete(account)}
+                          variant="destructive"
+                          size="lg"
+                          className="w-full text-base py-3"
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-5 w-5 mr-2" />
+                          Eliminar
                         </Button>
                       </div>
                     )}
