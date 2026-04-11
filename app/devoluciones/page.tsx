@@ -13,7 +13,7 @@ import { useReturnLoan } from '@/hooks/useLoans'
 import {
   ChevronLeft, ChevronRight, CalendarClock,
   AlertTriangle, Clock, CheckCircle, ArrowLeftRight,
-  List, Calendar, Package, RotateCcw, ShieldBan,
+  List, Calendar, Package, RotateCcw, ShieldBan, Search,
 } from 'lucide-react'
 
 // ---- Calendar helpers ----
@@ -89,6 +89,8 @@ export default function DevolucionesPage() {
 
   const today = new Date()
   const [tab, setTab] = useState<'lista' | 'calendario'>('lista')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'active' | 'urgent'>('all')
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate())
@@ -112,14 +114,42 @@ export default function DevolucionesPage() {
   const overdueLoans = activeLoans.filter((l: any) => l.status === 'overdue')
   const activeOnly = activeLoans.filter((l: any) => l.status === 'active')
 
-  // Sort for lista: overdue first, then by due date asc
-  const sortedLoans = useMemo(() => {
-    return [...activeLoans].sort((a: any, b: any) => {
-      const da = new Date(a.expected_return_date).getTime()
-      const db = new Date(b.expected_return_date).getTime()
-      return da - db
-    })
-  }, [activeLoans])
+  // Filtered + sorted loans for lista tab
+  const filteredLoans = useMemo(() => {
+    let list = [...activeLoans]
+
+    // Status filter
+    if (statusFilter === 'overdue') {
+      list = list.filter((l: any) => l.status === 'overdue')
+    } else if (statusFilter === 'active') {
+      list = list.filter((l: any) => l.status === 'active')
+    } else if (statusFilter === 'urgent') {
+      list = list.filter((l: any) => {
+        const days = getDaysUntil(l.expected_return_date)
+        return days >= 0 && days <= 3
+      })
+    }
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase()
+      list = list.filter((l: any) => {
+        const name = l.borrower_detail?.full_name || l.borrower_detail?.email || ''
+        const material = l.material_detail?.name || ''
+        const sku = l.material_detail?.sku || ''
+        return name.toLowerCase().includes(term) ||
+               material.toLowerCase().includes(term) ||
+               sku.toLowerCase().includes(term)
+      })
+    }
+
+    // Sort by due date asc (overdue first naturally since they have past dates)
+    return list.sort((a: any, b: any) =>
+      new Date(a.expected_return_date).getTime() - new Date(b.expected_return_date).getTime()
+    )
+  }, [activeLoans, statusFilter, searchTerm])
+
+  const sortedLoans = filteredLoans
 
   // Group loans by return date day key "YYYY-MM-DD"
   const loansByDay = useMemo(() => {
@@ -305,6 +335,50 @@ export default function DevolucionesPage() {
         {/* ====== TAB LISTA ====== */}
         {tab === 'lista' && (
           <div className="space-y-5">
+            {/* Búsqueda + Filtros */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar por usuario, material o SKU..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full rounded-xl border-2 border-border bg-card px-5 py-3.5 pl-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                {([
+                  { key: 'all', label: 'Todos', count: activeLoans.length },
+                  { key: 'overdue', label: 'Vencidos', count: overdueLoans.length },
+                  { key: 'urgent', label: 'Urgentes', count: activeLoans.filter((l: any) => { const d = getDaysUntil(l.expected_return_date); return d >= 0 && d <= 3 }).length },
+                  { key: 'active', label: 'Activos', count: activeOnly.length },
+                ] as const).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setStatusFilter(f.key)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                      statusFilter === f.key
+                        ? f.key === 'overdue' ? 'bg-red-500 text-white'
+                          : f.key === 'urgent' ? 'bg-amber-500 text-white'
+                          : 'bg-primary text-primary-foreground'
+                        : 'bg-secondary/40 text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {f.label}
+                    {f.count > 0 && (
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                        statusFilter === f.key ? 'bg-white/20' : 'bg-secondary text-muted-foreground'
+                      }`}>
+                        {f.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Resultados */}
             {activeLoans.length === 0 ? (
               <Card className="border-dashed border-2">
                 <CardContent className="p-16 text-center">
@@ -315,51 +389,29 @@ export default function DevolucionesPage() {
                   <p className="text-base text-muted-foreground">No hay prestamos pendientes de devolucion</p>
                 </CardContent>
               </Card>
+            ) : filteredLoans.length === 0 ? (
+              <Card className="border-dashed border-2">
+                <CardContent className="p-12 text-center">
+                  <Search className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-30" />
+                  <p className="text-base text-muted-foreground">Sin resultados para esta busqueda</p>
+                </CardContent>
+              </Card>
             ) : (
-              <>
-                {/* Vencidos */}
-                {overdueLoans.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-500/10 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">Vencidos</h2>
-                      <Badge variant="danger" className="text-sm px-3 py-1">{overdueLoans.length}</Badge>
-                    </div>
-                    {sortedLoans.filter((l: any) => l.status === 'overdue').map((loan: any) => (
-                      <ReturnCard
-                        key={loan.id}
-                        loan={loan}
-                        isInventarista={isInventarista}
-                        onReturn={() => handleOpenReturn(loan.id)}
-                        onPenalize={() => handleOpenPenalty(loan)}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Activos */}
-                {activeOnly.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-500/10 rounded-lg">
-                        <Package className="h-5 w-5 text-green-500" />
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">En circulacion</h2>
-                    </div>
-                    {sortedLoans.filter((l: any) => l.status === 'active').map((loan: any) => (
-                      <ReturnCard
-                        key={loan.id}
-                        loan={loan}
-                        isInventarista={isInventarista}
-                        onReturn={() => handleOpenReturn(loan.id)}
-                        onPenalize={() => {}}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  {filteredLoans.length} resultado{filteredLoans.length !== 1 ? 's' : ''}
+                  {searchTerm && ` para "${searchTerm}"`}
+                </p>
+                {filteredLoans.map((loan: any) => (
+                  <ReturnCard
+                    key={loan.id}
+                    loan={loan}
+                    isInventarista={isInventarista}
+                    onReturn={() => handleOpenReturn(loan.id)}
+                    onPenalize={() => handleOpenPenalty(loan)}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
