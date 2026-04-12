@@ -30,7 +30,9 @@ import {
   MapPinPlus,
   ArrowRight,
   ScanFace,
+  BookOpen,
 } from 'lucide-react'
+import { useUIStore } from '@/store/uiStore'
 import BiometricEnrollmentModal from '@/components/biometrics/BiometricEnrollmentModal'
 
 interface AccountForm {
@@ -54,6 +56,7 @@ interface AccountForm {
 export default function SettingsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { setCatalogMode } = useUIStore()
   const [formData, setFormData] = useState<AccountForm | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -777,6 +780,43 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Presentation Tools — hidden section */}
+      <div className="mt-2 border-t border-border/30 pt-6">
+        <details className="group">
+          <summary className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors list-none select-none">
+            <span className="text-[10px] uppercase tracking-widest">Herramientas de presentación</span>
+            <span className="ml-1 group-open:rotate-90 transition-transform text-[10px]">›</span>
+          </summary>
+          <div className="mt-4">
+            <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-transparent">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                      <BookOpen className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Modo Catálogo</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pantalla completa con galería de materiales, fotos y códigos QR escaneables
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setCatalogMode(true)}
+                    className="flex-shrink-0 bg-violet-600 hover:bg-violet-700 text-white border-0"
+                    size="lg"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Abrir catálogo
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </details>
       </div>
 
       <BiometricEnrollmentModal

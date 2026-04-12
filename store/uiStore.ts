@@ -5,11 +5,13 @@ interface UIState {
   theme: 'light' | 'dark'
   sidebarCollapsed: boolean
   kioskMode: boolean
+  catalogMode: boolean
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
   setKioskMode: (on: boolean) => void
+  setCatalogMode: (on: boolean) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -18,6 +20,7 @@ export const useUIStore = create<UIState>()(
       theme: 'light',
       sidebarCollapsed: false,
       kioskMode: false,
+      catalogMode: false,
 
       setTheme: (theme) => {
         set({ theme })
@@ -53,6 +56,7 @@ export const useUIStore = create<UIState>()(
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setKioskMode: (on) => set({ kioskMode: on }),
+      setCatalogMode: (on) => set({ catalogMode: on }),
     }),
     {
       name: 'ui-storage',
