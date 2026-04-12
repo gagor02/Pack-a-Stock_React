@@ -4,8 +4,14 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
-import { QRCodeSVG } from 'qrcode.react'
+import dynamic from 'next/dynamic'
 import api from '@/lib/api'
+
+// Load QRCodeSVG client-side only to avoid SSR issues
+const QRCodeSVG = dynamic(
+  () => import('qrcode.react').then((m) => m.QRCodeSVG),
+  { ssr: false, loading: () => <div className="w-[120px] h-[120px] bg-white/10 rounded-xl animate-pulse" /> }
+)
 import {
   X, Package, Search, RefreshCw, BookOpen,
   CheckCircle, AlertTriangle, MapPin, Tag,
