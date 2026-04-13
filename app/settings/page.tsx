@@ -757,7 +757,7 @@ export default function SettingsPage() {
             {/* Full Address Preview */}
             {!isEditing && (
               <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-                <CardContent className="p-6">
+                <CardContent className="px-6 py-8">
                   <div className="flex items-center gap-3">
                     <MapPin className="h-5 w-5 text-primary flex-shrink-0" />
                     <div>
