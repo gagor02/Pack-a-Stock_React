@@ -519,52 +519,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {/* Logo History */}
-            {logoHistory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <History className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-sm">Logos Recientes</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-2">
-                    {logoHistory.map((url, index) => (
-                      <div
-                        key={index}
-                        className="group relative aspect-square rounded-lg border border-border overflow-hidden bg-white"
-                      >
-                        <img
-                          src={url}
-                          alt={`Logo ${index + 1}`}
-                          className="w-full h-full object-contain p-1"
-                        />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => handleRestoreLogo(url)}
-                            className="p-1.5 bg-primary rounded-full hover:bg-primary/80 transition-colors"
-                            title="Restaurar"
-                          >
-                            <CheckCircle className="h-3 w-3 text-primary-foreground" />
-                          </button>
-                          <button
-                            onClick={() => removeLogoFromHistory(url)}
-                            className="p-1.5 bg-red-600 rounded-full hover:bg-red-500 transition-colors"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-3 w-3 text-white" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2 text-center">
-                    Pasa el cursor para restaurar o eliminar
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {/* Right Column - Detailed Information */}
@@ -754,30 +708,53 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {/* Full Address Preview */}
-            {!isEditing && (
-              <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-                <CardContent className="px-6 py-8">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-5 w-5 text-primary flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-foreground mb-1">
-                        Dirección Completa
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formData.street} {formData.exterior_number}
-                        {formData.interior_number && ` Int. ${formData.interior_number}`},{' '}
-                        {formData.neighborhood}
-                        <br />
-                        {formData.city}, {formData.state} {formData.postal_code}
-                        <br />
-                        {formData.country}
-                      </p>
-                    </div>
+            {/* Logo History */}
+            {logoHistory.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-sm">Logos Recientes</CardTitle>
                   </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-5 gap-2">
+                    {logoHistory.map((url, index) => (
+                      <div
+                        key={index}
+                        className="group relative aspect-square rounded-lg border border-border overflow-hidden bg-white"
+                      >
+                        <img
+                          src={url}
+                          alt={`Logo ${index + 1}`}
+                          className="w-full h-full object-contain p-1"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleRestoreLogo(url)}
+                            className="p-1.5 bg-primary rounded-full hover:bg-primary/80 transition-colors"
+                            title="Restaurar"
+                          >
+                            <CheckCircle className="h-3 w-3 text-primary-foreground" />
+                          </button>
+                          <button
+                            onClick={() => removeLogoFromHistory(url)}
+                            className="p-1.5 bg-red-600 rounded-full hover:bg-red-500 transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3 w-3 text-white" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Pasa el cursor para restaurar o eliminar
+                  </p>
                 </CardContent>
               </Card>
             )}
+
           </div>
         </div>
       </div>
