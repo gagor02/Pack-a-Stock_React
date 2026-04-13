@@ -253,30 +253,32 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-4 space-y-3">
+      <div className="p-6 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
-              <SettingsIcon className="h-5 w-5 text-primary" />
+              <SettingsIcon className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Configuración</h1>
-              <p className="text-xs text-muted-foreground">Administra la información de tu empresa</p>
+              <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
+              <p className="text-sm text-muted-foreground">
+                Administra la información de tu empresa
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
             {!isEditing ? (
-              <Button onClick={() => setIsEditing(true)}>
-                <SettingsIcon className="h-4 w-4 mr-2" />
-                Editar
+              <Button onClick={() => setIsEditing(true)} size="lg">
+                <SettingsIcon className="h-5 w-5 mr-2" />
+                Editar Información
               </Button>
             ) : (
               <>
-                <Button onClick={() => setIsEditing(false)} variant="secondary">Cancelar</Button>
-                <Button onClick={handleSubmit} disabled={updateMutation.isPending}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+                <Button onClick={() => setIsEditing(false)} variant="secondary" size="lg">Cancelar</Button>
+                <Button onClick={handleSubmit} disabled={updateMutation.isPending} size="lg">
+                  <Save className="h-5 w-5 mr-2" />
+                  {updateMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
                 </Button>
               </>
             )}
@@ -346,200 +348,223 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-3">
-
+        <div className="grid lg:grid-cols-3 gap-5">
           {/* Left Column */}
-          <div className="lg:col-span-1 flex flex-col gap-3">
-
-            {/* Profile Card */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Company Logo Card */}
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="relative flex-shrink-0">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center overflow-hidden border-4 border-primary/20">
+              <CardContent className="p-5">
+                <div className="text-center">
+                  <div className="relative inline-block mb-3">
+                    <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto overflow-hidden border-4 border-primary/20">
                       {logoPreview ? (
                         <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                       ) : accounts[0]?.logo ? (
                         <img src={accounts[0].logo} alt="Logo" className="w-full h-full object-cover" />
                       ) : (
-                        <Building2 className="h-10 w-10 text-primary/60" />
+                        <Building2 className="h-14 w-14 text-primary/60" />
                       )}
                     </div>
                     {isEditing && (
-                      <label className="absolute bottom-0 right-0 p-1.5 bg-primary rounded-full cursor-pointer hover:bg-primary/90 transition-colors">
-                        <Camera className="h-3 w-3 text-primary-foreground" />
+                      <label className="absolute bottom-0 right-0 p-2 bg-primary rounded-full cursor-pointer hover:bg-primary/90 transition-colors">
+                        <Camera className="h-4 w-4 text-primary-foreground" />
                         <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
                       </label>
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-foreground truncate">{formData.company_name}</h3>
-                    <p className="text-xs text-muted-foreground truncate">{formData.email}</p>
-                    <Badge variant="default" className="mt-1 text-xs">
-                      <CreditCard className="h-3 w-3 mr-1" />
-                      {{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[formData.subscription_plan || ''] || 'Freemium'}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Usuarios</span>
-                    <span className="font-medium">{formData.max_users === -1 ? '∞' : formData.max_users ?? 5}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Ubicaciones</span>
-                    <span className="font-medium">{formData.max_locations === -1 ? '∞' : formData.max_locations ?? 1}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 col-span-2 pt-1 border-t border-border/50">
-                    <Phone className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                    <span className="text-muted-foreground truncate">{formData.phone || 'Sin teléfono'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 col-span-2">
-                    <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                    <span className="text-muted-foreground truncate">
-                      {formData.city && formData.state ? `${formData.city}, ${formData.state}` : 'Sin ubicación'}
-                    </span>
+                  {isEditing && (
+                    <p className="text-xs text-muted-foreground mb-2">Este logo aparecerá en las etiquetas impresas</p>
+                  )}
+                  <h3 className="text-lg font-semibold text-foreground mb-0.5">{formData.company_name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">{formData.email}</p>
+                  <Badge variant="default" className="mb-2">
+                    <CreditCard className="h-3 w-3 mr-1" />
+                    Plan {{ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[formData.subscription_plan || ''] || 'Freemium'}
+                  </Badge>
+                  <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Usuarios max.</span>
+                      <span className="font-medium text-foreground">{formData.max_users === -1 ? '∞ Ilimitado' : formData.max_users ?? 5}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Ubicaciones max.</span>
+                      <span className="font-medium text-foreground">{formData.max_locations === -1 ? '∞ Ilimitado' : formData.max_locations ?? 1}</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Biometric Card — compact */}
-            <Card className={biometricStatus?.enrolled ? 'border-green-500/30' : 'border-amber-500/30'}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <ScanFace className={`h-4 w-4 ${biometricStatus?.enrolled ? 'text-green-400' : 'text-amber-400'}`} />
-                  <span className="text-sm font-medium text-foreground">Verificación Biométrica</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`flex-1 flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${
-                    biometricStatus?.enrolled
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                  }`}>
-                    {biometricStatus?.enrolled
-                      ? <><CheckCircle className="h-3.5 w-3.5" /><span>Registrado</span></>
-                      : <><ScanFace className="h-3.5 w-3.5" /><span>No registrado</span></>}
+            {/* Quick Stats */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-sm">Información Rápida</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-4 space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Teléfono</p>
+                    <p className="text-sm font-medium text-foreground">{formData.phone || 'No especificado'}</p>
                   </div>
-                  <button
-                    onClick={() => setShowEnrollModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium rounded-lg transition-colors flex-shrink-0"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                    {biometricStatus?.enrolled ? 'Actualizar' : 'Registrar'}
-                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="text-sm font-medium text-foreground truncate">{formData.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Ubicación</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {formData.city && formData.state ? `${formData.city}, ${formData.state}` : formData.city || formData.state || 'No especificada'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Biometric */}
+            <Card className={biometricStatus?.enrolled ? 'border-green-500/30' : 'border-amber-500/30'}>
+              <CardHeader className="pb-2 pt-4 px-5">
+                <div className="flex items-center gap-2">
+                  <ScanFace className={`h-4 w-4 ${biometricStatus?.enrolled ? 'text-green-400' : 'text-amber-400'}`} />
+                  <CardTitle className="text-sm">Verificación Biométrica</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-5 pb-4 space-y-2">
+                <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-xl ${
+                  biometricStatus?.enrolled
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  {biometricStatus?.enrolled
+                    ? <><CheckCircle className="h-4 w-4 flex-shrink-0" /><span className="font-medium">Rostro registrado</span></>
+                    : <><ScanFace className="h-4 w-4 flex-shrink-0" /><span className="font-medium">No registrado</span></>}
                 </div>
                 {biometricStatus?.enrolled_at && (
-                  <p className="text-[10px] text-muted-foreground mt-1.5">
+                  <p className="text-xs text-muted-foreground">
                     Registrado el {new Date(biometricStatus.enrolled_at).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}
                   </p>
                 )}
+                <button
+                  onClick={() => setShowEnrollModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-xl transition-colors"
+                >
+                  <Camera className="h-4 w-4" />
+                  {biometricStatus?.enrolled ? 'Actualizar rostro' : 'Registrar rostro'}
+                </button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* General Information */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-base">Información General</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-5 pb-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Nombre de la Empresa *', field: 'company_name' },
+                    { label: 'Teléfono', field: 'phone', placeholder: '(55) 1234-5678' },
+                    { label: 'Email *', field: 'email', type: 'email' },
+                    { label: 'Plan de Suscripción', field: '_plan', disabled: true },
+                  ].map(({ label, field, type, placeholder, disabled }) => (
+                    <div key={field}>
+                      <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
+                      <Input
+                        type={type || 'text'}
+                        value={field === '_plan'
+                          ? ({ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[(formData.subscription_plan || '') as string] || 'Freemium')
+                          : (formData as any)[field] ?? ''}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          field !== '_plan' && setFormData({ ...formData, [field]: e.target.value })
+                        }
+                        disabled={!isEditing || !!disabled}
+                        placeholder={placeholder}
+                        className={disabled ? 'bg-secondary/20' : ''}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Address */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-5">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-base">Dirección</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-5 pb-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Calle', field: 'street', span: 2 },
+                    { label: 'Núm. Ext.', field: 'exterior_number' },
+                    { label: 'Colonia', field: 'neighborhood', span: 2 },
+                    { label: 'Núm. Int.', field: 'interior_number', placeholder: 'Opcional' },
+                    { label: 'Ciudad', field: 'city' },
+                    { label: 'Estado', field: 'state' },
+                    { label: 'C.P.', field: 'postal_code' },
+                    { label: 'País', field: 'country', span: 2 },
+                  ].map(({ label, field, span, placeholder }) => (
+                    <div key={field} className={span === 2 ? 'col-span-2' : ''}>
+                      <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
+                      <Input
+                        value={(formData as any)[field] ?? ''}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setFormData({ ...formData, [field]: e.target.value })
+                        }
+                        disabled={!isEditing}
+                        placeholder={placeholder}
+                      />
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
             {/* Logo History */}
             {logoHistory.length > 0 && (
               <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <div className="flex items-center gap-2">
                     <History className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">Logos Recientes</span>
+                    <CardTitle className="text-sm">Logos Recientes</CardTitle>
                   </div>
-                  <div className="grid grid-cols-5 gap-1.5">
+                </CardHeader>
+                <CardContent className="px-5 pb-4">
+                  <div className="grid grid-cols-5 gap-2">
                     {logoHistory.map((url, index) => (
                       <div key={index} className="group relative aspect-square rounded-lg border border-border overflow-hidden bg-white">
                         <img src={url} alt={`Logo ${index + 1}`} className="w-full h-full object-contain p-1" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                          <button onClick={() => handleRestoreLogo(url)} className="p-1 bg-primary rounded-full hover:bg-primary/80" title="Restaurar">
-                            <CheckCircle className="h-2.5 w-2.5 text-primary-foreground" />
+                          <button onClick={() => handleRestoreLogo(url)} className="p-1.5 bg-primary rounded-full hover:bg-primary/80" title="Restaurar">
+                            <CheckCircle className="h-3 w-3 text-primary-foreground" />
                           </button>
-                          <button onClick={() => removeLogoFromHistory(url)} className="p-1 bg-red-600 rounded-full hover:bg-red-500" title="Eliminar">
-                            <Trash2 className="h-2.5 w-2.5 text-white" />
+                          <button onClick={() => removeLogoFromHistory(url)} className="p-1.5 bg-red-600 rounded-full hover:bg-red-500" title="Eliminar">
+                            <Trash2 className="h-3 w-3 text-white" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">Pasa el cursor para restaurar o eliminar</p>
                 </CardContent>
               </Card>
             )}
           </div>
-
-          {/* Right Column — all fields in one card */}
-          <div className="lg:col-span-2">
-            <Card className="h-full">
-              <CardContent className="p-4 h-full flex flex-col gap-4">
-
-                {/* General */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">Información General</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: 'Empresa', field: 'company_name', colSpan: 2 },
-                      { label: 'Teléfono', field: 'phone', placeholder: '(55) 1234-5678' },
-                      { label: 'Email', field: 'email', type: 'email', colSpan: 2 },
-                      { label: 'Plan', field: '_plan', disabled: true },
-                    ].map(({ label, field, type, colSpan, placeholder, disabled }) => (
-                      <div key={field} className={colSpan === 2 ? 'col-span-2' : ''}>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-                        <Input
-                          type={type || 'text'}
-                          value={field === '_plan'
-                            ? ({ freemium: 'Freemium', monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' }[(formData.subscription_plan || '') as string] || 'Freemium')
-                            : (formData as any)[field] ?? ''}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            field !== '_plan' && setFormData({ ...formData, [field]: e.target.value })
-                          }
-                          disabled={!isEditing || !!disabled}
-                          placeholder={placeholder}
-                          className={disabled ? 'bg-secondary/20' : ''}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="border-t border-border/50" />
-
-                {/* Address */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">Dirección</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: 'Calle', field: 'street', colSpan: 2 },
-                      { label: 'Núm. Ext.', field: 'exterior_number' },
-                      { label: 'Colonia', field: 'neighborhood', colSpan: 2 },
-                      { label: 'Núm. Int.', field: 'interior_number', placeholder: 'Opcional' },
-                      { label: 'Ciudad', field: 'city' },
-                      { label: 'Estado', field: 'state' },
-                      { label: 'CP', field: 'postal_code' },
-                      { label: 'País', field: 'country', colSpan: 2 },
-                    ].map(({ label, field, colSpan, placeholder }) => (
-                      <div key={field} className={colSpan === 2 ? 'col-span-2' : ''}>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-                        <Input
-                          value={(formData as any)[field] ?? ''}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setFormData({ ...formData, [field]: e.target.value })
-                          }
-                          disabled={!isEditing}
-                          placeholder={placeholder}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </CardContent>
-            </Card>
-          </div>
-
         </div>
       </div>
 
