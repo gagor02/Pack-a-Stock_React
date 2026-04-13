@@ -758,8 +758,8 @@ export default function SettingsPage() {
             {!isEditing && (
               <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
                 <CardContent className="p-6">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-primary mt-1" />
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <MapPin className="h-5 w-5 text-primary" />
                     <div>
                       <p className="text-sm font-medium text-foreground mb-1">
                         Dirección Completa
