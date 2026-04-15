@@ -77,7 +77,7 @@ function MaterialRowLandscape({ mat, onClick, isInventarista }: { mat: any; onCl
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-stretch gap-0 bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-violet-500/30 transition-colors text-left"
+      className="w-full h-full flex items-stretch gap-0 bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-violet-500/30 transition-colors text-left"
     >
       <div className="w-52 flex-shrink-0 bg-white/5 flex items-center justify-center overflow-hidden">
         {imgSrc
@@ -86,7 +86,7 @@ function MaterialRowLandscape({ mat, onClick, isInventarista }: { mat: any; onCl
         }
       </div>
 
-      <div className="flex-1 px-7 py-5 flex flex-col justify-between min-w-0">
+      <div className="flex-1 px-7 py-4 flex flex-col justify-between min-w-0">
         <div>
           <div className="flex items-start gap-3 mb-2">
             <div className="flex-1 min-w-0">
@@ -121,7 +121,7 @@ function MaterialRowLandscape({ mat, onClick, isInventarista }: { mat: any; onCl
         )}
       </div>
 
-      <div className="w-48 flex-shrink-0 flex flex-col items-center justify-center gap-3 px-5 py-5 border-l border-white/10">
+      <div className="w-48 flex-shrink-0 flex flex-col items-center justify-center gap-3 px-5 py-4 border-l border-white/10">
         {mat.qr_code ? (
           <>
             <div className="bg-white p-3 rounded-2xl shadow-lg shadow-black/40">
@@ -142,7 +142,7 @@ function MaterialRowPortrait({ mat, onClick, isInventarista }: { mat: any; onCli
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-stretch gap-0 bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-violet-500/30 transition-colors text-left"
+      className="w-full h-full flex items-stretch gap-0 bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-violet-500/30 transition-colors text-left"
     >
       <div className="w-28 flex-shrink-0 bg-white/5 flex items-center justify-center overflow-hidden">
         {imgSrc
@@ -457,7 +457,7 @@ export default function CatalogMode() {
     <div className="fixed inset-0 z-[9999] bg-[#0a0a1a] text-white flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className={`flex items-center justify-between ${px} py-3 border-b border-white/10 flex-shrink-0`}>
+      <div className={`flex items-center justify-between ${px} py-2 border-b border-white/10 flex-shrink-0`}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 shadow-lg shadow-violet-500/30">
             <BookOpen className={portrait ? 'h-5 w-5 text-white' : 'h-6 w-6 text-white'} />
@@ -497,7 +497,7 @@ export default function CatalogMode() {
       </div>
 
       {/* Search + filters */}
-      <div className={`${px} py-2.5 flex flex-wrap gap-2 flex-shrink-0 border-b border-white/5`}>
+      <div className={`${px} py-1.5 flex flex-wrap gap-2 flex-shrink-0 border-b border-white/5`}>
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
           <input
@@ -524,7 +524,7 @@ export default function CatalogMode() {
       </div>
 
       {/* Cards */}
-      <div className={`flex-1 ${px} py-3 flex flex-col gap-3 overflow-hidden`}>
+      <div className={`flex-1 ${px} py-2 flex flex-col gap-2 overflow-hidden`}>
         {filtered.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <Package className="h-16 w-16 text-white/10" />
@@ -532,15 +532,18 @@ export default function CatalogMode() {
           </div>
         ) : (
           pageItems.map((mat) => (
-            portrait
-              ? <MaterialRowPortrait key={mat.id} mat={mat} onClick={() => isInventarista && setManaging(mat)} isInventarista={isInventarista} />
-              : <MaterialRowLandscape key={mat.id} mat={mat} onClick={() => isInventarista && setManaging(mat)} isInventarista={isInventarista} />
+            <div key={mat.id} className="flex-1 min-h-0 flex flex-col">
+              {portrait
+                ? <MaterialRowPortrait mat={mat} onClick={() => isInventarista && setManaging(mat)} isInventarista={isInventarista} />
+                : <MaterialRowLandscape mat={mat} onClick={() => isInventarista && setManaging(mat)} isInventarista={isInventarista} />
+              }
+            </div>
           ))
         )}
       </div>
 
       {/* Pagination footer */}
-      <div className={`${px} py-3 border-t border-white/10 flex items-center justify-between flex-shrink-0`}>
+      <div className={`${px} py-2 border-t border-white/10 flex items-center justify-between flex-shrink-0`}>
         <span className="text-xs text-white/20 hidden sm:block">
           {filtered.length} material{filtered.length !== 1 ? 'es' : ''}
         </span>
