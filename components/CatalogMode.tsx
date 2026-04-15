@@ -149,6 +149,7 @@ export default function CatalogMode() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(0)
+  const [timerKey, setTimerKey] = useState(0)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
   const { data: matsRes, refetch } = useQuery({
@@ -192,8 +193,15 @@ export default function CatalogMode() {
   // Reset page when filter/search changes
   useEffect(() => { setPage(0) }, [search, statusFilter])
 
-  const prevPage = useCallback(() => setPage((p) => Math.max(0, p - 1)), [])
-  const nextPage = useCallback(() => setPage((p) => Math.min(totalPages - 1, p + 1)), [totalPages])
+  const prevPage = useCallback(() => { setPage((p) => Math.max(0, p - 1)); setTimerKey((k) => k + 1) }, [])
+  const nextPage = useCallback(() => { setPage((p) => (p + 1) % (totalPages || 1)); setTimerKey((k) => k + 1) }, [totalPages])
+
+  // Auto-advance every 7 seconds — resets when user navigates manually
+  useEffect(() => {
+    if (!catalogMode || totalPages <= 1) return
+    const t = setTimeout(() => { setPage((p) => (p + 1) % totalPages); setTimerKey((k) => k + 1) }, 7000)
+    return () => clearTimeout(t)
+  }, [catalogMode, totalPages, timerKey, search, statusFilter])
 
   // Keyboard navigation
   useEffect(() => {
@@ -217,6 +225,14 @@ export default function CatalogMode() {
   }, [catalogMode])
 
   if (!catalogMode) return null
+
+  // keyframe injected once
+  if (typeof document !== 'undefined' && !document.getElementById('catalog-kf')) {
+    const s = document.createElement('style')
+    s.id = 'catalog-kf'
+    s.textContent = '@keyframes progress7s { from { width: 0% } to { width: 100% } }'
+    document.head.appendChild(s)
+  }
 
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -319,29 +335,35 @@ export default function CatalogMode() {
           <div className="flex items-center gap-3">
             <button
               onClick={prevPage}
-              disabled={page === 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-sm text-white transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-sm text-white transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
               Anterior
             </button>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {Array.from({ length: totalPages }, (_, i) => (
                 <button
                   key={i}
-                  onClick={() => setPage(i)}
-                  className={`w-2.5 h-2.5 rounded-full transition-all ${
-                    i === page ? 'bg-violet-500 scale-125' : 'bg-white/20 hover:bg-white/40'
-                  }`}
-                />
+                  onClick={() => { setPage(i); setTimerKey((k) => k + 1) }}
+                  className="relative w-8 h-2 rounded-full bg-white/20 hover:bg-white/30 overflow-hidden transition-colors"
+                >
+                  {i === page && (
+                    <span
+                      className="absolute inset-y-0 left-0 bg-violet-500 rounded-full"
+                      style={{ animation: 'progress7s 7s linear forwards' }}
+                    />
+                  )}
+                  {i !== page && i < page && (
+                    <span className="absolute inset-0 bg-violet-500/50 rounded-full" />
+                  )}
+                </button>
               ))}
             </div>
 
             <button
               onClick={nextPage}
-              disabled={page >= totalPages - 1}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed text-sm text-white transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-sm text-white transition-colors"
             >
               Siguiente
               <ChevronRight className="h-4 w-4" />
